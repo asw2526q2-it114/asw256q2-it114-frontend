@@ -2,14 +2,16 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, LockKeyhole, LogIn, Mail, UserPlus, UserRound } from "lucide-react";
-import { ApiError, authApi, isUnauthorized } from "@/lib/api";
+import { AlertCircle, Github, LockKeyhole, LogIn, Mail, UserPlus, UserRound } from "lucide-react";
+import { ApiError, OAUTH_LOGIN_URL, authApi, isUnauthorized } from "@/lib/api";
+import { useToast } from "@/components/feedback-provider";
 import { getStoredApiKey, storeAuthSession } from "@/lib/auth";
 
 type AuthMode = "signin" | "signup";
 
 export default function LoginPage() {
   const router = useRouter();
+  const toast = useToast();
   const [mode, setMode] = useState<AuthMode>("signin");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
@@ -48,9 +50,12 @@ export default function LoginPage() {
     try {
       const session = await authApi.login({ login: trimmedLogin, password });
       storeAuthSession(session);
+      toast.success("Signed in successfully.", "Welcome back");
       router.replace("/issues");
     } catch (loginError) {
-      setError(isUnauthorized(loginError) ? "Username or password is incorrect." : errorMessage(loginError, "Login failed. Try again."));
+      const message = isUnauthorized(loginError) ? "Username or password is incorrect." : errorMessage(loginError, "Login failed. Try again.");
+      setError(message);
+      toast.error(loginError, message);
     } finally {
       setSubmitting(false);
     }
@@ -81,9 +86,12 @@ export default function LoginPage() {
         password2
       });
       storeAuthSession(session);
+      toast.success("Account created successfully.", "Welcome");
       router.replace("/issues");
     } catch (signupError) {
-      setError(errorMessage(signupError, "Account creation failed. Try again."));
+      const message = errorMessage(signupError, "Account creation failed. Try again.");
+      setError(message);
+      toast.error(signupError, message);
     } finally {
       setSubmitting(false);
     }
@@ -106,6 +114,13 @@ export default function LoginPage() {
         </div>
 
         <form className="login-form" onSubmit={handleSubmit}>
+          <a className="button secondary oauth-button" href={OAUTH_LOGIN_URL}>
+            <Github size={18} aria-hidden="true" />
+            Continue with GitHub
+          </a>
+          <div className="auth-divider">
+            <span>Local fallback</span>
+          </div>
           <div className="auth-mode-switch" role="tablist" aria-label="Authentication mode">
             <button
               aria-selected={mode === "signin"}

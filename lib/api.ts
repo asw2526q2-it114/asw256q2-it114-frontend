@@ -1,7 +1,10 @@
-import { getStoredApiKey, type AuthSession } from "@/lib/auth";
+import { getStoredApiKey, getStoredUser, type AuthSession } from "@/lib/auth";
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || "http://localhost:8000/api";
+export const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, "");
+export const OAUTH_LOGIN_URL =
+  process.env.NEXT_PUBLIC_OAUTH_LOGIN_URL?.replace(/\/$/, "") || `${API_ORIGIN}/accounts/github/login/`;
 
 export class ApiError extends Error {
   status: number;
@@ -55,7 +58,8 @@ export type Issue = {
   status_color?: string;
   assigned_to?: UserSummary | null;
   creator?: UserSummary;
-  tags?: string[];
+  tags?: string[] | string;
+  watchers?: UserSummary[];
   deadline?: string | null;
   created_at?: string;
   updated_at?: string;
@@ -72,11 +76,21 @@ export type IssueInput = {
   severity?: string;
   assigned_to?: number | null;
   deadline?: string | null;
-  tags?: string[];
+  tags?: string | string[];
 };
 
 export type IssueDeadline = {
   deadline?: string | null;
+};
+
+export type IssueBulkCreateInput = {
+  rows: string;
+  issue_type: string;
+  severity: string;
+  priority: string;
+  status: string;
+  assigned_to?: number | null;
+  tags?: string;
 };
 
 export type IssueComment = {
@@ -91,6 +105,7 @@ export type IssueComment = {
 
 export type Attachment = {
   id: number;
+  creator?: UserSummary;
   original_name?: string;
   content_type?: string;
   size?: number;
@@ -145,6 +160,7 @@ export type UserProfile = {
 
 export type UserProfileInput = {
   bio?: string;
+  avatar?: File | null;
   remove_avatar?: boolean;
 };
 
@@ -272,6 +288,9 @@ export const issueApi = {
   create(input: IssueInput) {
     return apiFetch<Issue>("/issues/", { method: "POST", body: JSON.stringify(input) });
   },
+  bulkCreate(input: IssueBulkCreateInput) {
+    return apiFetch<Issue[]>("/issues/bulk/", { method: "POST", body: JSON.stringify(input) });
+  },
   update(id: string | number, input: IssueInput) {
     return apiFetch<Issue>(`/issues/${id}/`, { method: "PUT", body: JSON.stringify(input) });
   },
@@ -338,6 +357,14 @@ export const issueApi = {
   attachments(id: string | number) {
     return apiFetch<Attachment[]>(`/issues/${id}/attachments/`);
   },
+  uploadAttachments(id: string | number, files: FileList | File[]) {
+    const formData = new FormData();
+    Array.from(files).forEach((file) => formData.append("file", file));
+    return apiFetch<Issue | Attachment[]>(`/issues/${id}/attachments/`, {
+      method: "POST",
+      body: formData
+    });
+  },
   deleteAttachment(issueId: string | number, attachmentId: string | number) {
     return apiFetch<void>(`/issues/${issueId}/attachments/${attachmentId}/`, { method: "DELETE" });
   }
@@ -351,6 +378,13 @@ export const profileApi = {
     return apiFetch<UserProfile>(`/users/${username}/${queryString(params)}`);
   },
   update(input: UserProfileInput) {
+    if (input.avatar || input.remove_avatar) {
+      const formData = new FormData();
+      if (input.bio !== undefined) formData.append("bio", input.bio);
+      if (input.avatar) formData.append("avatar", input.avatar);
+      if (input.remove_avatar) formData.append("remove_avatar", "true");
+      return apiFetch<UserProfile>("/users/me/", { method: "PATCH", body: formData });
+    }
     return apiFetch<UserProfile>("/users/me/", { method: "PATCH", body: JSON.stringify(input) });
   }
 };
@@ -396,6 +430,18 @@ export function displayName(value: unknown) {
 
 export function issueNumber(issue: Issue) {
   return issue.id;
+}
+
+export function isCurrentUser(user?: UserSummary | null) {
+  const current = getStoredUser();
+  if (!current || !user) return false;
+  if (typeof user.id === "number" && user.id === current.id) return true;
+  return Boolean(user.username && user.username === current.username);
+}
+
+export function issueTags(value?: string[] | string) {
+  if (!value) return "";
+  return Array.isArray(value) ? value.join(", ") : value;
 }
 
 async function readResponse(response: Response) {

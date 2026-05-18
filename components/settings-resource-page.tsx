@@ -7,6 +7,7 @@ import { AuthPending } from "@/components/auth-pending";
 import { ErrorPanel } from "@/components/error-panel";
 import { LoadingPanel } from "@/components/loading-panel";
 import { PageTitle } from "@/components/page-title";
+import { useConfirm, useToast } from "@/components/feedback-provider";
 import { CatalogItem, catalogApi, displayName, getCatalogResource } from "@/lib/api";
 import { useAsyncData } from "@/lib/hooks";
 
@@ -75,6 +76,8 @@ const resourceUi: Record<string, ResourceUiConfig> = {
 };
 
 export function SettingsResourcePage({ resourceKey }: { resourceKey: string }) {
+  const confirm = useConfirm();
+  const toast = useToast();
   const resource = getCatalogResource(resourceKey);
   const ui = resourceUi[resource.key] || resourceUi.statuses;
   const showKey = resource.key !== "due-dates";
@@ -83,11 +86,31 @@ export function SettingsResourcePage({ resourceKey }: { resourceKey: string }) {
   const { data, error, loading, unauthorized, reload } = useAsyncData(() => catalogApi.list(resource.path), [resource.path]);
 
   async function remove(item: CatalogItem, replacement?: string) {
-    if (ui.requiresReplacement) {
+    if (!ui.requiresReplacement) {
+      await confirm({
+        title: `Delete ${resource.singular.toLowerCase()} "${itemTitle(item, ui)}"?`,
+        description: `This removes the ${resource.singular.toLowerCase()} from settings.`,
+        actionLabel: "Delete",
+        destructive: true,
+        onConfirm: async () => {
+          try {
+            await catalogApi.remove(resource.path, item.id);
+            toast.success(`${resource.singular} was deleted.`, "Setting deleted");
+            setDeleting(null);
+            await reload();
+          } catch (error) {
+            toast.error(error, `Unable to delete ${resource.singular.toLowerCase()}.`);
+          }
+        }
+      });
+      return;
+    }
+    try {
       await catalogApi.remove(resource.path, item.id, { replacement });
-    } else {
-      if (!confirm(`Delete ${resource.singular.toLowerCase()} "${itemTitle(item, ui)}"?`)) return;
-      await catalogApi.remove(resource.path, item.id);
+      toast.success(`${resource.singular} was deleted.`, "Setting deleted");
+    } catch (error) {
+      toast.error(error, `Unable to delete ${resource.singular.toLowerCase()}.`);
+      return;
     }
     setDeleting(null);
     await reload();
@@ -199,17 +222,31 @@ function CatalogEditor({
   onSaved: (input: Partial<CatalogItem>) => Promise<void>;
   ui: ResourceUiConfig;
 }) {
+  const toast = useToast();
   const initial = useMemo(() => editorState(item, ui), [item, ui]);
   const [input, setInput] = useState(initial);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    await onSaved(cleanCatalogInput(input, ui));
+    const validation = validateCatalogInput(input, ui);
+    setErrors(validation.errors);
+    if (validation.firstInvalid) {
+      focusCatalogField(validation.firstInvalid);
+      return;
+    }
+
+    try {
+      await onSaved(cleanCatalogInput(input, ui));
+      toast.success(`${label} was saved.`, "Setting saved");
+    } catch (error) {
+      toast.error(error, `Unable to save ${label.toLowerCase()}.`);
+    }
   }
 
   return (
     <div className="modal-backdrop" role="presentation">
-      <form className="modal grid" onSubmit={(event) => void submit(event)}>
+      <form className="modal grid" onSubmit={(event) => void submit(event)} noValidate>
         <div className="page-header">
           <div>
             <p className="eyebrow">{item ? `Edit ${label}` : `New ${label}`}</p>
@@ -224,7 +261,11 @@ function CatalogEditor({
             field={field}
             key={field.name}
             value={input[field.name]}
-            onChange={(value) => setInput((current) => ({ ...current, [field.name]: value }))}
+            error={errors[field.name]}
+            onChange={(value) => {
+              setInput((current) => ({ ...current, [field.name]: value }));
+              setErrors((current) => ({ ...current, [field.name]: "" }));
+            }}
           />
         ))}
         <div className="toolbar">
@@ -241,10 +282,12 @@ function CatalogEditor({
 }
 
 function CatalogField({
+  error,
   field,
   onChange,
   value
 }: {
+  error?: string;
   field: FieldConfig;
   onChange: (value: string | boolean) => void;
   value: string | boolean;
@@ -263,13 +306,21 @@ function CatalogField({
     return (
       <div className="field">
         <label htmlFor={id}>{field.label}</label>
-        <select className="select" id={id} value={String(value)} onChange={(event) => onChange(event.target.value)}>
+        <select
+          aria-describedby={error ? `${id}-error` : undefined}
+          aria-invalid={Boolean(error)}
+          className="select"
+          id={id}
+          value={String(value)}
+          onChange={(event) => onChange(event.target.value)}
+        >
           {field.options?.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
         </select>
+        <FieldError id={`${id}-error`} message={error} />
       </div>
     );
   }
@@ -278,16 +329,26 @@ function CatalogField({
     <div className="field">
       <label htmlFor={id}>{field.label}</label>
       <input
+        aria-describedby={error ? `${id}-error` : undefined}
+        aria-invalid={Boolean(error)}
         className="input"
         id={id}
         min={field.type === "number" ? 0 : undefined}
-        required={field.required}
         type={field.type}
         value={String(value)}
         onChange={(event) => onChange(event.target.value)}
       />
+      <FieldError id={`${id}-error`} message={error} />
     </div>
   );
+}
+
+function FieldError({ id, message }: { id: string; message?: string }) {
+  return message ? (
+    <p className="field-error" id={id}>
+      {message}
+    </p>
+  ) : null;
 }
 
 function ReplacementDeleteDialog({
@@ -306,15 +367,24 @@ function ReplacementDeleteDialog({
   ui: ResourceUiConfig;
 }) {
   const replacements = items.filter((candidate) => candidate.id !== item.id);
-  const [replacement, setReplacement] = useState(String(replacements[0]?.id || ""));
+  const [replacement, setReplacement] = useState("");
+  const [error, setError] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   return (
     <div className="modal-backdrop" role="presentation">
       <form
         className="modal grid"
+        noValidate
         onSubmit={(event) => {
           event.preventDefault();
-          void onDelete(replacement);
+          if (!replacement) {
+            setError("Choose a replacement before deleting this item.");
+            focusCatalogField("replacement");
+            return;
+          }
+          setDeleting(true);
+          void onDelete(replacement).finally(() => setDeleting(false));
         }}
       >
         <div>
@@ -324,20 +394,32 @@ function ReplacementDeleteDialog({
         </div>
         <div className="field">
           <label htmlFor="replacement">Replacement</label>
-          <select className="select" id="replacement" required value={replacement} onChange={(event) => setReplacement(event.target.value)}>
+          <select
+            aria-describedby={error ? "replacement-error" : undefined}
+            aria-invalid={Boolean(error)}
+            className="select"
+            id="replacement"
+            value={replacement}
+            onChange={(event) => {
+              setReplacement(event.target.value);
+              setError("");
+            }}
+          >
+            <option value="">Choose replacement</option>
             {replacements.map((candidate) => (
               <option key={candidate.id} value={candidate.id}>
                 {displayName(candidate)}
               </option>
             ))}
           </select>
+          <FieldError id="replacement-error" message={error} />
         </div>
         <div className="toolbar">
-          <button className="button danger" disabled={!replacement} type="submit">
+          <button className="button danger" disabled={deleting} type="submit">
             <Trash2 size={16} aria-hidden="true" />
-            Delete
+            {deleting ? "Deleting" : "Delete"}
           </button>
-          <button className="button secondary" onClick={onClose} type="button">
+          <button className="button secondary" disabled={deleting} onClick={onClose} type="button">
             Cancel
           </button>
         </div>
@@ -356,6 +438,23 @@ function colorSettingConfig(label: string): ResourceUiConfig {
     ],
     titleField: "label"
   };
+}
+
+function validateCatalogInput(input: Record<string, string | boolean>, ui: ResourceUiConfig) {
+  const errors: Record<string, string> = {};
+  let firstInvalid = "";
+  ui.editable.forEach((field) => {
+    if (!field.required) return;
+    if (String(input[field.name] || "").trim()) return;
+    errors[field.name] = `${field.label} is required.`;
+    if (!firstInvalid) firstInvalid = field.name;
+  });
+  return { errors, firstInvalid };
+}
+
+function focusCatalogField(field: string) {
+  const element = document.getElementById(field === "replacement" ? "replacement" : `catalog-${field}`);
+  if (element instanceof HTMLElement) element.focus();
 }
 
 function editorState(item: CatalogItem | null, ui: ResourceUiConfig) {

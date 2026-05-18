@@ -9,6 +9,7 @@ import {
   Settings,
 } from "lucide-react";
 import { AuthStatusPill } from "@/components/auth-status-pill";
+import { FeedbackProvider } from "@/components/feedback-provider";
 import { getStoredApiKey, subscribeToAuthChanges } from "@/lib/auth";
 
 const navItems = [
@@ -42,7 +43,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [authRoute, router]);
 
   if (authRoute) {
-    return <div className="auth-frame">{children}</div>;
+    return <FeedbackProvider><div className="auth-frame">{children}</div></FeedbackProvider>;
   }
 
   if (!authenticated) {
@@ -54,6 +55,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
+    <FeedbackProvider>
     <div className="app-shell">
       <aside className="sidebar" aria-label="Primary navigation">
         <Link className="brand" href="/issues">
@@ -97,6 +99,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         })}
       </nav>
     </div>
+    </FeedbackProvider>
   );
 }
 
