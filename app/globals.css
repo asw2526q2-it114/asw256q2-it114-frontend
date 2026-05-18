@@ -522,6 +522,38 @@ h3 {
     min-width: 100%;
   }
 
+  .toolbar {
+    align-items: stretch;
+  }
+
+  .toolbar .button {
+    min-width: 44px;
+  }
+
+  .panel {
+    padding: 12px;
+  }
+
+  .tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 2px;
+  }
+
+  .tab {
+    flex: 0 0 auto;
+    min-width: 96px;
+  }
+
+  .table th,
+  .table td {
+    padding: 10px 8px;
+  }
+
+  .table td {
+    min-width: 132px;
+  }
+
   .mobile-bar {
     position: fixed;
     left: 0;
