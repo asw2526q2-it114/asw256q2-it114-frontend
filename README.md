@@ -19,4 +19,5 @@ Authentication is intentionally pending until the backend exposes GitHub OAuth. 
 
 ## Deployment
 
-Heroku deployment is planned for a later story and is not configured yet.
+Heroku deployment is planned for a later story and is not configured yet. See
+[`docs/deployment-heroku.md`](docs/deployment-heroku.md) for the placeholder notes.
