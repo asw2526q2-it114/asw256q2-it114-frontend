@@ -1,5 +1,5 @@
-import { CommentsPage } from "@/components/comments-page";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <CommentsPage />;
+  redirect("/issues");
 }

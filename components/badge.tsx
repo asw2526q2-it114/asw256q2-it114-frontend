@@ -1,22 +1,15 @@
 export function StatusBadge({ value }: { value: unknown }) {
   const label = labelFor(value);
+  const color = colorFor(value);
   const tone = toneFor(label);
-  return <span className={`badge ${tone}`}>{label}</span>;
-}
-
-export function ColorSwatch({ color }: { color?: string }) {
   return (
     <span
-      aria-hidden="true"
-      style={{
-        width: 14,
-        height: 14,
-        borderRadius: 999,
-        display: "inline-block",
-        background: color || "#c4c9b4",
-        border: "1px solid rgb(0 0 0 / 0.12)"
-      }}
-    />
+      className={`badge ${tone}`}
+      style={color ? { borderColor: color, color } : undefined}
+      title={color || label}
+    >
+      {label}
+    </span>
   );
 }
 
@@ -25,9 +18,15 @@ function labelFor(value: unknown) {
   if (typeof value === "string" || typeof value === "number") return String(value);
   if (typeof value === "object") {
     const record = value as Record<string, unknown>;
-    return String(record.name || record.slug || record.value || "Unset");
+    return String(record.label || record.name || record.display_name || record.key || record.slug || record.value || "Unset");
   }
   return "Unset";
+}
+
+function colorFor(value: unknown) {
+  if (!value || typeof value !== "object") return "";
+  const color = (value as Record<string, unknown>).color;
+  return typeof color === "string" ? color : "";
 }
 
 function toneFor(label: string) {
