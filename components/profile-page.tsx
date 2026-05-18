@@ -2,29 +2,42 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
-import { Save } from "lucide-react";
+import { Pencil, Save, X } from "lucide-react";
 import { AuthPending } from "@/components/auth-pending";
+import { StatusBadge } from "@/components/badge";
 import { ErrorPanel } from "@/components/error-panel";
 import { LoadingPanel } from "@/components/loading-panel";
 import { PageTitle } from "@/components/page-title";
-import { displayName, issueNumber, profileApi, UserProfile } from "@/lib/api";
+import { displayName, profileApi, UserProfile } from "@/lib/api";
 import { useAsyncData } from "@/lib/hooks";
 
 export function ProfilePage({ username }: { username?: string }) {
   const [tab, setTab] = useState<"assigned" | "watched" | "comments">("assigned");
-  const loader = () => (username ? profileApi.get(username, { tab }) : profileApi.me({ tab }));
-  const { data, error, loading, unauthorized, reload } = useAsyncData(loader, [username, tab]);
+  const [editing, setEditing] = useState(false);
+  const ownProfile = !username;
+  const activeTab = !ownProfile && tab === "watched" ? "assigned" : tab;
+  const loader = () => (username ? profileApi.get(username, { tab: activeTab }) : profileApi.me({ tab: activeTab }));
+  const { data, error, loading, unauthorized, reload } = useAsyncData(loader, [username, activeTab]);
+  const tabs: Array<"assigned" | "watched" | "comments"> = ownProfile ? ["assigned", "watched", "comments"] : ["assigned", "comments"];
 
   return (
     <main className="page">
       <PageTitle
         eyebrow="Profile"
         title={username ? `${username}'s profile` : "My profile"}
-        description="View assigned issues, watched issues, comments, and editable profile information."
+        description="View assigned issues, watched issues, comments, and profile information."
+        actions={
+          ownProfile && data && !editing ? (
+            <button className="button secondary" onClick={() => setEditing(true)} type="button">
+              <Pencil size={16} aria-hidden="true" />
+              Edit profile
+            </button>
+          ) : null
+        }
       />
       <nav className="tabs">
-        {(["assigned", "watched", "comments"] as const).map((item) => (
-          <button className={`tab ${tab === item ? "active" : ""}`} key={item} onClick={() => setTab(item)} type="button">
+        {tabs.map((item) => (
+          <button className={`tab ${activeTab === item ? "active" : ""}`} key={item} onClick={() => setTab(item)} type="button">
             {item}
           </button>
         ))}
@@ -35,8 +48,17 @@ export function ProfilePage({ username }: { username?: string }) {
       {data ? (
         <section className="grid two">
           <ProfileSummary profile={data} />
-          {!username ? <ProfileEditor profile={data} onSaved={reload} /> : null}
-          <ProfileActivity profile={data} tab={tab} />
+          {ownProfile && editing ? (
+            <ProfileEditor
+              profile={data}
+              onCancel={() => setEditing(false)}
+              onSaved={async () => {
+                await reload();
+                setEditing(false);
+              }}
+            />
+          ) : null}
+          <ProfileActivity profile={data} tab={activeTab} />
         </section>
       ) : null}
     </main>
@@ -44,42 +66,62 @@ export function ProfilePage({ username }: { username?: string }) {
 }
 
 function ProfileSummary({ profile }: { profile: UserProfile }) {
+  const user = profile.profile;
   return (
     <div className="panel grid">
       <div>
         <p className="eyebrow">User</p>
-        <h2>{displayName(profile)}</h2>
-        <p className="muted">{profile.email || profile.username || "No public email"}</p>
+        <h2>{displayName(user)}</h2>
+        <p className="muted">{user?.username || "No username"}</p>
       </div>
-      <p>{profile.bio || "No bio provided."}</p>
+      <p>{user?.bio || "No bio provided."}</p>
+      <div className="grid three">
+        <Stat label="Open assigned" value={profile.stats?.open_assigned_count} />
+        <Stat label="Watched" value={profile.stats?.watched_count} />
+        <Stat label="Comments" value={profile.stats?.comments_count} />
+      </div>
     </div>
   );
 }
 
-function ProfileEditor({ profile, onSaved }: { profile: UserProfile; onSaved: () => Promise<void> }) {
-  const [input, setInput] = useState({ full_name: profile.full_name || "", bio: profile.bio || "" });
+function Stat({ label, value }: { label: string; value?: number }) {
+  return (
+    <div>
+      <p className="label">{label}</p>
+      <strong>{value ?? "Not shown"}</strong>
+    </div>
+  );
+}
+
+function ProfileEditor({
+  profile,
+  onCancel,
+  onSaved
+}: {
+  profile: UserProfile;
+  onCancel: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [input, setInput] = useState({ bio: profile.profile?.bio || "" });
+  const [saving, setSaving] = useState(false);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    await profileApi.update(input);
-    await onSaved();
+    setSaving(true);
+    try {
+      await profileApi.update(input);
+      await onSaved();
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
     <form className="panel grid" onSubmit={(event) => void submit(event)}>
       <div>
         <p className="eyebrow">Edit profile</p>
-        <h2>Editable fields</h2>
-        <p className="muted">Saving is gated by the future GitHub OAuth session.</p>
-      </div>
-      <div className="field">
-        <label htmlFor="full-name">Full name</label>
-        <input
-          className="input"
-          id="full-name"
-          value={input.full_name}
-          onChange={(event) => setInput((current) => ({ ...current, full_name: event.target.value }))}
-        />
+        <h2>Profile details</h2>
+        <p className="muted">Saving uses the API key from your current sign-in.</p>
       </div>
       <div className="field">
         <label htmlFor="bio">Bio</label>
@@ -90,16 +132,22 @@ function ProfileEditor({ profile, onSaved }: { profile: UserProfile; onSaved: ()
           onChange={(event) => setInput((current) => ({ ...current, bio: event.target.value }))}
         />
       </div>
-      <button className="button primary" type="submit">
-        <Save size={16} aria-hidden="true" />
-        Save profile
-      </button>
+      <div className="toolbar">
+        <button className="button primary" disabled={saving} type="submit">
+          <Save size={16} aria-hidden="true" />
+          {saving ? "Saving" : "Save profile"}
+        </button>
+        <button className="button secondary" disabled={saving} onClick={onCancel} type="button">
+          <X size={16} aria-hidden="true" />
+          Cancel
+        </button>
+      </div>
     </form>
   );
 }
 
 function ProfileActivity({ profile, tab }: { profile: UserProfile; tab: "assigned" | "watched" | "comments" }) {
-  const items = profile[tab];
+  const items = tab === "assigned" ? profile.assigned_issues : tab === "watched" ? profile.watched_issues : profile.comments;
   return (
     <div className="panel table-wrap" style={{ gridColumn: "1 / -1" }}>
       <table className="table">
@@ -113,13 +161,23 @@ function ProfileActivity({ profile, tab }: { profile: UserProfile; tab: "assigne
           {Array.isArray(items) && items.length > 0 ? (
             items.map((item) => {
               const record = item as Record<string, unknown>;
-              const issueId = typeof record.id === "number" ? record.id : typeof record.issue === "number" ? record.issue : undefined;
+              const nestedIssue = record.issue && typeof record.issue === "object" ? (record.issue as Record<string, unknown>) : null;
+              const issueId = typeof nestedIssue?.id === "number" ? nestedIssue.id : typeof record.id === "number" ? record.id : undefined;
+              const detail =
+                tab === "comments"
+                  ? String(record.body || "No detail")
+                  : String(record.subject || nestedIssue?.subject || "No detail");
               return (
                 <tr key={String(record.id || record.issue || JSON.stringify(record))}>
                   <td>
-                    {issueId ? <Link href={`/issues/${issueId}`}>#{issueNumber(record as never)}</Link> : "Activity"}
+                    {issueId ? <Link href={`/issues/${issueId}`}>#{issueId}</Link> : "Activity"}
                   </td>
-                  <td>{String(record.subject || record.comment || record.text || record.content || "No detail")}</td>
+                  <td>
+                    <div className="grid">
+                      <span>{detail}</span>
+                      {tab === "comments" ? <span className="muted">{formatDate(String(record.created_at || ""))}</span> : <IssueSummaryBadges record={record} />}
+                    </div>
+                  </td>
                 </tr>
               );
             })
@@ -132,4 +190,26 @@ function ProfileActivity({ profile, tab }: { profile: UserProfile; tab: "assigne
       </table>
     </div>
   );
+}
+
+function IssueSummaryBadges({ record }: { record: Record<string, unknown> }) {
+  return (
+    <span className="toolbar">
+      <StatusBadge value={catalogBadge(record.status_label, record.status_color, record.status)} />
+      <StatusBadge value={catalogBadge(record.priority_label, record.priority_color, record.priority)} />
+      <span className="muted">{formatDate(String(record.updated_at || ""))}</span>
+    </span>
+  );
+}
+
+function catalogBadge(label: unknown, color: unknown, key: unknown) {
+  return {
+    color: typeof color === "string" ? color : undefined,
+    label: String(label || key || "Unset")
+  };
+}
+
+function formatDate(value?: string) {
+  if (!value) return "Not set";
+  return new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }

@@ -16,7 +16,7 @@ import { IssueCollaborationPanel } from "@/components/issue-collaboration-panel"
 const tabs = [
   { key: "overview", label: "Overview", icon: UserRoundCheck },
   { key: "planning", label: "Planning", icon: CalendarClock },
-  { key: "collaboration", label: "Collaboration", icon: MessageSquareText },
+  { key: "collaboration", label: "Comments", icon: MessageSquareText },
   { key: "attachments", label: "Attachments", icon: Paperclip }
 ];
 
@@ -29,7 +29,7 @@ export function IssueDetailPage({ issueId }: { issueId: string }) {
       <PageTitle
         eyebrow="Issue detail"
         title={issue ? `#${issueNumber(issue)} ${issue.subject}` : `Issue #${issueId}`}
-        description="Inspect status, planning, collaboration, watchers, and attachments."
+        description="Inspect status, planning, comments, watchers, and attachments."
         actions={
           <Link className="button secondary" href="/issues">
             Back to issues
@@ -60,12 +60,14 @@ export function IssueDetailPage({ issueId }: { issueId: string }) {
               </div>
               <div className="panel grid">
                 <div className="grid two">
-                  <Meta label="Status" value={<StatusBadge value={issue.status_extra_info || issue.status} />} />
-                  <Meta label="Type" value={displayName(issue.type_extra_info || issue.issue_type || issue.type)} />
-                  <Meta label="Severity" value={<StatusBadge value={issue.severity_extra_info || issue.severity} />} />
-                  <Meta label="Priority" value={displayName(issue.priority_extra_info || issue.priority)} />
-                  <Meta label="Assignee" value={displayName(issue.assigned_to_extra_info || issue.assigned_to)} />
-                  <Meta label="Modified" value={formatDate(issue.modified_date || issue.created_date)} />
+                  <Meta label="Status" value={<StatusBadge value={catalogBadge(issue.status_label, issue.status_color, issue.status)} />} />
+                  <Meta label="Type" value={<StatusBadge value={catalogBadge(issue.issue_type_label, issue.issue_type_color, issue.issue_type)} />} />
+                  <Meta label="Severity" value={<StatusBadge value={catalogBadge(issue.severity_label, issue.severity_color, issue.severity)} />} />
+                  <Meta label="Priority" value={<StatusBadge value={catalogBadge(issue.priority_label, issue.priority_color, issue.priority)} />} />
+                  <Meta label="Assignee" value={displayName(issue.assigned_to)} />
+                  <Meta label="Created" value={formatDate(issue.created_at)} />
+                  <Meta label="Updated" value={formatDate(issue.updated_at)} />
+                  <Meta label="Deadline" value={issue.deadline || "Not set"} />
                 </div>
               </div>
             </section>
@@ -91,4 +93,8 @@ function Meta({ label, value }: { label: string; value: React.ReactNode }) {
 function formatDate(value?: string) {
   if (!value) return "Not set";
   return new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
+function catalogBadge(label?: string, color?: string, key?: string) {
+  return { color, label: label || key || "Unset" };
 }

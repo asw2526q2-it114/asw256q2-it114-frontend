@@ -1,26 +1,57 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   CircleUserRound,
-  Github,
   LayoutList,
-  MessageSquareText,
   Settings,
 } from "lucide-react";
 import { AuthStatusPill } from "@/components/auth-status-pill";
+import { getStoredApiKey, subscribeToAuthChanges } from "@/lib/auth";
 
 const navItems = [
   { href: "/issues", label: "Issues", icon: LayoutList },
-  { href: "/comments", label: "Comments", icon: MessageSquareText },
   { href: "/settings", label: "Settings", icon: Settings },
-  { href: "/profile", label: "Profile", icon: CircleUserRound },
-  { href: "/auth", label: "OAuth", icon: Github }
+  { href: "/profile", label: "Profile", icon: CircleUserRound }
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const authRoute = pathname.startsWith("/login") || pathname.startsWith("/auth");
+  const [authenticated, setAuthenticated] = useState(false);
+
+  useEffect(() => {
+    if (authRoute) return;
+
+    const refreshAuth = () => {
+      const hasApiKey = Boolean(getStoredApiKey());
+      setAuthenticated(hasApiKey);
+      if (!hasApiKey) router.replace("/login");
+    };
+
+    const checkTimer = window.setTimeout(refreshAuth, 0);
+    const unsubscribe = subscribeToAuthChanges(refreshAuth);
+
+    return () => {
+      window.clearTimeout(checkTimer);
+      unsubscribe();
+    };
+  }, [authRoute, router]);
+
+  if (authRoute) {
+    return <div className="auth-frame">{children}</div>;
+  }
+
+  if (!authenticated) {
+    return (
+      <div className="auth-guard">
+        <span className="brand-mark">IH</span>
+      </div>
+    );
+  }
 
   return (
     <div className="app-shell">
@@ -71,9 +102,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
 function titleForPath(pathname: string) {
   if (pathname.startsWith("/settings")) return "Configuration";
-  if (pathname.startsWith("/comments")) return "Activity";
   if (pathname.startsWith("/profile")) return "Profile";
-  if (pathname.startsWith("/auth")) return "Authentication";
+  if (pathname.startsWith("/auth") || pathname.startsWith("/login")) return "Authentication";
   if (pathname.includes("/deadline")) return "Planning";
   if (pathname.startsWith("/issues")) return "Issues";
   return "Dashboard";

@@ -1,3 +1,5 @@
+import { getStoredApiKey, type AuthSession } from "@/lib/auth";
+
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || "http://localhost:8000/api";
 
@@ -17,104 +19,150 @@ export type SortDirection = "asc" | "desc";
 
 export type CatalogItem = {
   id: number;
-  name: string;
-  slug?: string;
+  key?: string;
+  label?: string;
+  name?: string;
   color?: string;
-  order?: number;
   is_closed?: boolean;
-  days_to_due?: number | null;
-  by_default?: boolean;
+  days?: number | null;
+  before_after?: "before" | "after" | "";
+  created_at?: string;
   [key: string]: unknown;
 };
 
 export type UserSummary = {
   id?: number;
   username?: string;
-  full_name?: string;
-  full_name_display?: string;
-  photo?: string | null;
-  avatar?: string | null;
+  display_name?: string;
   [key: string]: unknown;
 };
 
 export type Issue = {
   id: number;
-  ref?: number;
-  number?: number;
   subject: string;
   description?: string;
-  status?: string | number | CatalogItem;
-  status_extra_info?: CatalogItem;
-  priority?: string | number | CatalogItem;
-  priority_extra_info?: CatalogItem;
-  severity?: string | number | CatalogItem;
-  severity_extra_info?: CatalogItem;
-  issue_type?: string | number | CatalogItem;
-  type?: string | number | CatalogItem;
-  type_extra_info?: CatalogItem;
-  assigned_to?: number | null;
-  assigned_to_extra_info?: UserSummary | null;
-  tags?: string[] | CatalogItem[] | string;
-  modified_date?: string;
-  created_date?: string;
-  finished_date?: string | null;
-  version?: number;
+  issue_type?: string;
+  issue_type_label?: string;
+  issue_type_color?: string;
+  severity?: string;
+  severity_label?: string;
+  severity_color?: string;
+  priority?: string;
+  priority_label?: string;
+  priority_color?: string;
+  status?: string;
+  status_label?: string;
+  status_color?: string;
+  assigned_to?: UserSummary | null;
+  creator?: UserSummary;
+  tags?: string[];
+  deadline?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  attachments?: Attachment[];
   [key: string]: unknown;
 };
 
 export type IssueInput = {
-  subject: string;
+  subject?: string;
   description?: string;
-  issue_type?: string | number;
-  status?: string | number;
-  priority?: string | number;
-  severity?: string | number;
+  issue_type?: string;
+  status?: string;
+  priority?: string;
+  severity?: string;
   assigned_to?: number | null;
-  tags?: string[] | string;
+  deadline?: string | null;
+  tags?: string[];
 };
 
 export type IssueDeadline = {
-  id?: number;
-  issue?: number;
-  deadline?: string;
-  due_date?: string;
-  reason?: string;
-  color?: string;
-  [key: string]: unknown;
+  deadline?: string | null;
 };
 
 export type IssueComment = {
   id: number;
-  issue?: number;
-  issue_extra_info?: { id?: number; subject?: string; ref?: number };
-  comment?: string;
-  text?: string;
-  content?: string;
-  created_date?: string;
-  modified_date?: string;
-  user?: UserSummary;
-  owner?: UserSummary;
+  creator?: UserSummary;
+  issue?: { id?: number; subject?: string };
+  body?: string;
+  created_at?: string;
+  updated_at?: string;
   [key: string]: unknown;
 };
 
 export type Attachment = {
   id: number;
-  name?: string;
-  filename?: string;
-  url?: string;
-  file?: string;
-  created_date?: string;
+  original_name?: string;
+  content_type?: string;
+  size?: number;
+  url?: string | null;
+  extension?: string;
+  uploaded_at?: string;
   [key: string]: unknown;
 };
 
-export type UserProfile = UserSummary & {
+export type UserMeProfile = {
+  id?: number;
+  username?: string;
+  display_name?: string;
   bio?: string;
-  email?: string;
-  assigned?: Issue[];
-  watched?: Issue[];
-  comments?: IssueComment[];
-  [key: string]: unknown;
+  initials?: string;
+  avatar_url?: string | null;
+  api_key?: string;
 };
+
+export type UserMeStats = {
+  open_assigned_count?: number;
+  watched_count?: number;
+  comments_count?: number;
+};
+
+export type UserMeIssueSummary = Pick<
+  Issue,
+  | "id"
+  | "subject"
+  | "issue_type"
+  | "issue_type_label"
+  | "issue_type_color"
+  | "severity"
+  | "severity_label"
+  | "severity_color"
+  | "priority"
+  | "priority_label"
+  | "priority_color"
+  | "status"
+  | "status_label"
+  | "status_color"
+  | "updated_at"
+>;
+
+export type UserProfile = {
+  profile?: UserMeProfile;
+  stats?: UserMeStats;
+  assigned_issues?: UserMeIssueSummary[];
+  watched_issues?: UserMeIssueSummary[];
+  comments?: IssueComment[];
+};
+
+export type UserProfileInput = {
+  bio?: string;
+  remove_avatar?: boolean;
+};
+
+export type LoginInput = {
+  login: string;
+  password: string;
+};
+
+export type LoginResponse = AuthSession;
+
+export type SignupInput = {
+  username: string;
+  email: string;
+  password1: string;
+  password2: string;
+};
+
+export type SignupResponse = AuthSession;
 
 type QueryValue = string | number | boolean | null | undefined;
 
@@ -155,12 +203,64 @@ export function queryString(params: Record<string, QueryValue>) {
 }
 
 export function getAuthHeaders(): HeadersInit {
-  return {};
+  const apiKey = getStoredApiKey();
+  return apiKey ? { "X-API-Key": apiKey } : {};
 }
 
 export function isUnauthorized(error: unknown) {
   return error instanceof ApiError && error.status === 401;
 }
+
+export const authApi = {
+  async login(input: LoginInput) {
+    const response = await fetch(`${API_BASE_URL}/login/`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(input),
+      cache: "no-store"
+    });
+
+    if (!response.ok) {
+      const details = await readResponse(response);
+      const message =
+        typeof details === "object" && details && "detail" in details
+          ? String((details as { detail: unknown }).detail)
+          : response.status === 400 || response.status === 401
+            ? "Login failed"
+            : `Request failed with ${response.status}`;
+      throw new ApiError(response.status, message, details);
+    }
+
+    return (await readResponse(response)) as LoginResponse;
+  },
+  async signup(input: SignupInput) {
+    const response = await fetch(`${API_BASE_URL}/signup/`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(input),
+      cache: "no-store"
+    });
+
+    if (!response.ok) {
+      const details = await readResponse(response);
+      const message =
+        typeof details === "object" && details && "detail" in details
+          ? String((details as { detail: unknown }).detail)
+          : response.status === 400 || response.status === 401
+            ? "Account creation failed"
+            : `Request failed with ${response.status}`;
+      throw new ApiError(response.status, message, details);
+    }
+
+    return (await readResponse(response)) as SignupResponse;
+  }
+};
 
 export const issueApi = {
   list(params: Record<string, QueryValue>) {
@@ -196,13 +296,13 @@ export const issueApi = {
   addComment(id: string | number, comment: string) {
     return apiFetch<IssueComment>(`/issues/${id}/comments/`, {
       method: "POST",
-      body: JSON.stringify({ comment })
+      body: JSON.stringify({ body: comment })
     });
   },
   updateComment(issueId: string | number, commentId: string | number, comment: string) {
     return apiFetch<IssueComment>(`/issues/${issueId}/comments/${commentId}/`, {
       method: "PATCH",
-      body: JSON.stringify({ comment })
+      body: JSON.stringify({ body: comment })
     });
   },
   deleteComment(issueId: string | number, commentId: string | number) {
@@ -243,12 +343,6 @@ export const issueApi = {
   }
 };
 
-export const commentApi = {
-  list() {
-    return apiFetch<IssueComment[]>("/comments/");
-  }
-};
-
 export const profileApi = {
   me(params: Record<string, QueryValue>) {
     return apiFetch<UserProfile>(`/users/me/${queryString(params)}`);
@@ -256,7 +350,7 @@ export const profileApi = {
   get(username: string, params: Record<string, QueryValue>) {
     return apiFetch<UserProfile>(`/users/${username}/${queryString(params)}`);
   },
-  update(input: Partial<UserProfile>) {
+  update(input: UserProfileInput) {
     return apiFetch<UserProfile>("/users/me/", { method: "PATCH", body: JSON.stringify(input) });
   }
 };
@@ -286,8 +380,8 @@ export const catalogApi = {
   update(path: string, id: number, input: Partial<CatalogItem>) {
     return apiFetch<CatalogItem>(`${path}${id}/`, { method: "PUT", body: JSON.stringify(input) });
   },
-  remove(path: string, id: number) {
-    return apiFetch<void>(`${path}${id}/`, { method: "DELETE" });
+  remove(path: string, id: number, params: Record<string, QueryValue> = {}) {
+    return apiFetch<void>(`${path}${id}/${queryString(params)}`, { method: "DELETE" });
   }
 };
 
@@ -295,13 +389,13 @@ export function displayName(value: unknown) {
   if (typeof value === "string" || typeof value === "number") return String(value);
   if (value && typeof value === "object") {
     const record = value as Record<string, unknown>;
-    return String(record.name || record.full_name_display || record.username || record.slug || record.id || "Unassigned");
+    return String(record.label || record.name || record.display_name || record.username || record.key || record.slug || record.id || "Not set");
   }
-  return "Unassigned";
+  return "Not set";
 }
 
 export function issueNumber(issue: Issue) {
-  return issue.ref || issue.number || issue.id;
+  return issue.id;
 }
 
 async function readResponse(response: Response) {
