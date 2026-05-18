@@ -3,26 +3,79 @@
 import { FormEvent, useState } from "react";
 import { Save, Trash2, UserMinus } from "lucide-react";
 import { ErrorPanel } from "@/components/error-panel";
+import { useConfirm, useToast } from "@/components/feedback-provider";
 import { LoadingPanel } from "@/components/loading-panel";
 import { displayName, issueApi } from "@/lib/api";
 import { useAsyncData } from "@/lib/hooks";
 
 export function IssuePlanningPanel({ issueId }: { issueId: string }) {
+  const confirm = useConfirm();
+  const toast = useToast();
   const deadline = useAsyncData(() => issueApi.getDeadline(issueId), [issueId]);
+  const currentAssignee = useAsyncData(() => issueApi.assignee(issueId), [issueId]);
   const members = useAsyncData(() => issueApi.assignableMembers(issueId), [issueId]);
   const [date, setDate] = useState("");
-  const [reason, setReason] = useState("");
   const [assignee, setAssignee] = useState("");
 
   async function saveDeadline(event: FormEvent) {
     event.preventDefault();
-    await issueApi.saveDeadline(issueId, { due_date: date, deadline: date, reason });
-    await deadline.reload();
+    try {
+      await issueApi.saveDeadline(issueId, { deadline: date || null });
+      await deadline.reload();
+      toast.success("Deadline was saved.", "Deadline saved");
+    } catch (error) {
+      toast.error(error, "Unable to save deadline.");
+    }
   }
 
   async function saveAssignee() {
     if (!assignee) return;
-    await issueApi.setAssignee(issueId, Number(assignee));
+    try {
+      await issueApi.setAssignee(issueId, Number(assignee));
+      setAssignee("");
+      await Promise.all([currentAssignee.reload(), members.reload()]);
+      toast.success("Assignee was updated.", "Assignee saved");
+    } catch (error) {
+      toast.error(error, "Unable to assign issue.");
+    }
+  }
+
+  async function removeDeadline() {
+    await confirm({
+      title: "Remove this deadline?",
+      description: "The issue will no longer have a deadline date.",
+      actionLabel: "Remove deadline",
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await issueApi.deleteDeadline(issueId);
+          setDate("");
+          await deadline.reload();
+          toast.success("Deadline was removed.", "Deadline removed");
+        } catch (error) {
+          toast.error(error, "Unable to remove deadline.");
+        }
+      }
+    });
+  }
+
+  async function clearAssignee() {
+    await confirm({
+      title: "Clear the current assignee?",
+      description: "The issue will become unassigned.",
+      actionLabel: "Clear assignee",
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await issueApi.deleteAssignee(issueId);
+          setAssignee("");
+          await Promise.all([currentAssignee.reload(), members.reload()]);
+          toast.success("Assignee was cleared.", "Assignee cleared");
+        } catch (error) {
+          toast.error(error, "Unable to clear assignee.");
+        }
+      }
+    });
   }
 
   return (
@@ -40,17 +93,8 @@ export function IssuePlanningPanel({ issueId }: { issueId: string }) {
             className="input"
             id="deadline"
             type="date"
-            value={date || String(deadline.data?.due_date || deadline.data?.deadline || "").slice(0, 10)}
+            value={date || String(deadline.data?.deadline || "").slice(0, 10)}
             onChange={(event) => setDate(event.target.value)}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="reason">Reason</label>
-          <textarea
-            className="textarea"
-            id="reason"
-            value={reason || String(deadline.data?.reason || "")}
-            onChange={(event) => setReason(event.target.value)}
           />
         </div>
         <div className="toolbar">
@@ -60,10 +104,7 @@ export function IssuePlanningPanel({ issueId }: { issueId: string }) {
           </button>
           <button
             className="button danger"
-            onClick={async () => {
-              await issueApi.deleteDeadline(issueId);
-              await deadline.reload();
-            }}
+            onClick={() => void removeDeadline()}
             type="button"
           >
             <Trash2 size={16} aria-hidden="true" />
@@ -76,6 +117,9 @@ export function IssuePlanningPanel({ issueId }: { issueId: string }) {
           <p className="eyebrow">Assignee</p>
           <h2>Assign ownership</h2>
         </div>
+        {currentAssignee.loading ? <LoadingPanel label="Loading assignee" /> : null}
+        {currentAssignee.error && !currentAssignee.unauthorized ? <ErrorPanel error={currentAssignee.error} onRetry={currentAssignee.reload} /> : null}
+        {!currentAssignee.loading ? <p className="muted">Current assignee: {displayName(currentAssignee.data)}</p> : null}
         {members.loading ? <LoadingPanel label="Loading members" /> : null}
         {members.error && !members.unauthorized ? <ErrorPanel error={members.error} onRetry={members.reload} /> : null}
         <div className="field">
@@ -94,7 +138,11 @@ export function IssuePlanningPanel({ issueId }: { issueId: string }) {
             <Save size={16} aria-hidden="true" />
             Assign
           </button>
-          <button className="button secondary" onClick={() => void issueApi.deleteAssignee(issueId)} type="button">
+          <button
+            className="button secondary"
+            onClick={() => void clearAssignee()}
+            type="button"
+          >
             <UserMinus size={16} aria-hidden="true" />
             Clear assignee
           </button>
