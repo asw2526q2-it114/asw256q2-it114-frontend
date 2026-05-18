@@ -28,7 +28,8 @@ Create `.env.local` when the API is not running at the default URL:
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api
 ```
 
-Authentication is intentionally pending until the backend exposes GitHub OAuth. Protected actions render an auth-pending state instead of collecting an API key.
+Sign in or create an account at `/login`. The frontend stores the returned API key in `localStorage` and sends it as
+`X-API-Key` on protected API requests.
 
 ## Deployment
 

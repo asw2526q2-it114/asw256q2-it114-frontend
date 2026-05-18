@@ -1,19 +1,18 @@
 import Link from "next/link";
-import { Github } from "lucide-react";
+import { LogIn } from "lucide-react";
 
 export function AuthPending({ compact = false }: { compact?: boolean }) {
   return (
     <div className={compact ? "panel" : "empty-state panel"}>
       <div>
-        <Github size={compact ? 18 : 28} aria-hidden="true" />
-        <h3>GitHub OAuth pending</h3>
+        <LogIn size={compact ? 18 : 28} aria-hidden="true" />
+        <h3>Sign in required</h3>
         <p className="muted">
-          The backend contract does not expose OAuth yet. Protected API actions are wired but paused until
-          authenticated headers are available.
+          Protected API actions need your IssueHub API key. Sign in to authorize requests from this browser.
         </p>
         {!compact ? (
-          <Link className="button secondary" href="/auth">
-            View auth status
+          <Link className="button secondary" href="/login">
+            Sign in
           </Link>
         ) : null}
       </div>
