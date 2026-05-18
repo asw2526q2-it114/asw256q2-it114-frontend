@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { CalendarClock, UserRoundCheck } from "lucide-react";
+import { CalendarClock, MessageSquareText, Paperclip, UserRoundCheck } from "lucide-react";
 import { AuthPending } from "@/components/auth-pending";
 import { StatusBadge } from "@/components/badge";
 import { ErrorPanel } from "@/components/error-panel";
@@ -11,10 +11,13 @@ import { PageTitle } from "@/components/page-title";
 import { displayName, issueApi, issueNumber } from "@/lib/api";
 import { useAsyncData } from "@/lib/hooks";
 import { IssuePlanningPanel } from "@/components/issue-planning-panel";
+import { IssueCollaborationPanel } from "@/components/issue-collaboration-panel";
 
 const tabs = [
   { key: "overview", label: "Overview", icon: UserRoundCheck },
-  { key: "planning", label: "Planning", icon: CalendarClock }
+  { key: "planning", label: "Planning", icon: CalendarClock },
+  { key: "collaboration", label: "Collaboration", icon: MessageSquareText },
+  { key: "attachments", label: "Attachments", icon: Paperclip }
 ];
 
 export function IssueDetailPage({ issueId }: { issueId: string }) {
@@ -68,6 +71,8 @@ export function IssueDetailPage({ issueId }: { issueId: string }) {
             </section>
           ) : null}
           {tab === "planning" ? <IssuePlanningPanel issueId={issueId} /> : null}
+          {tab === "collaboration" ? <IssueCollaborationPanel issueId={issueId} mode="comments" /> : null}
+          {tab === "attachments" ? <IssueCollaborationPanel issueId={issueId} mode="attachments" /> : null}
         </>
       ) : null}
     </main>
