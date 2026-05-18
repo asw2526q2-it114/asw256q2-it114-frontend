@@ -2,6 +2,19 @@
 
 Next.js frontend for the IssueHub API.
 
+### Membres de l'equip
+
+- Pol Giralt
+- Pol Montanera
+- Noel Freire
+- Sergi Galán
+- Fernando Joel Alcívar
+
+### Projecte a Taiga
+
+Link: https://tree.taiga.io/project/polmontanera-asw/timeline
+  
+
 ## Local setup
 
 ```bash
