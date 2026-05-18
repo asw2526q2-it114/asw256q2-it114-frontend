@@ -43,11 +43,16 @@ function Comments({ issueId }: { issueId: string }) {
         {error ? <ErrorPanel error={error} onRetry={reload} /> : null}
         {data?.map((item) => (
           <article className="card panel" key={item.id}>
-            <p>{item.comment || item.text || item.content || "Empty comment"}</p>
+            <p>{item.body || "Empty comment"}</p>
             <p className="muted">
-              {displayName(item.user || item.owner)} · {formatDate(item.created_date)}
+              {displayName(item.creator)} - {formatDate(item.created_at)}
             </p>
-            <button className="icon-button danger" onClick={() => void issueApi.deleteComment(issueId, item.id).then(reload)} title="Delete comment" type="button">
+            <button
+              className="icon-button danger"
+              onClick={() => void issueApi.deleteComment(issueId, item.id).then(reload)}
+              title="Delete comment"
+              type="button"
+            >
               <Trash2 size={16} aria-hidden="true" />
             </button>
           </article>
@@ -64,7 +69,6 @@ function Attachments({ issueId }: { issueId: string }) {
       <div>
         <p className="eyebrow">Files</p>
         <h2>Attachments</h2>
-        <p className="muted">Upload controls are waiting on the authenticated multipart flow.</p>
       </div>
       {loading ? <LoadingPanel label="Loading attachments" /> : null}
       {error ? <ErrorPanel error={error} onRetry={reload} /> : null}
@@ -72,8 +76,20 @@ function Attachments({ issueId }: { issueId: string }) {
         {data?.map((attachment) => (
           <article className="card panel" key={attachment.id}>
             <Paperclip size={18} aria-hidden="true" />
-            <h3>{attachment.name || attachment.filename || `Attachment ${attachment.id}`}</h3>
-            <p className="muted">{formatDate(attachment.created_date)}</p>
+            <h3>
+              {attachment.url ? (
+                <a href={attachment.url} rel="noreferrer" target="_blank">
+                  {attachment.original_name || `Attachment ${attachment.id}`}
+                </a>
+              ) : (
+                attachment.original_name || `Attachment ${attachment.id}`
+              )}
+            </h3>
+            <p className="muted">
+              {formatBytes(attachment.size)} {attachment.content_type ? `- ${attachment.content_type}` : ""}
+              {attachment.extension ? ` - .${attachment.extension}` : ""}
+            </p>
+            <p className="muted">{formatDate(attachment.uploaded_at)}</p>
             <button
               className="button danger"
               onClick={() => void issueApi.deleteAttachment(issueId, attachment.id).then(reload)}
@@ -92,4 +108,11 @@ function Attachments({ issueId }: { issueId: string }) {
 function formatDate(value?: string) {
   if (!value) return "Not set";
   return new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
+function formatBytes(value?: number) {
+  if (!value && value !== 0) return "Size unknown";
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }

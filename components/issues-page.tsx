@@ -8,14 +8,14 @@ import { StatusBadge } from "@/components/badge";
 import { ErrorPanel } from "@/components/error-panel";
 import { LoadingPanel } from "@/components/loading-panel";
 import { PageTitle } from "@/components/page-title";
-import { displayName, issueApi, Issue, IssueInput, issueNumber } from "@/lib/api";
+import { CatalogItem, catalogApi, displayName, issueApi, Issue, IssueInput, issueNumber } from "@/lib/api";
 import { useAsyncData } from "@/lib/hooks";
 
-const sortOptions = ["modified", "type", "severity", "number", "status"];
+const sortOptions = ["created_at", "subject", "status", "priority", "severity", "assigned_to", "deadline"];
 
 export function IssuesPage() {
   const [query, setQuery] = useState("");
-  const [filters, setFilters] = useState({ sort: "modified", dir: "desc" });
+  const [filters, setFilters] = useState({ sort: "created_at", dir: "desc" });
   const [editing, setEditing] = useState<Issue | "new" | null>(null);
   const params = useMemo(() => ({ q: query, sort: filters.sort, dir: filters.dir }), [query, filters]);
   const { data, error, loading, unauthorized, reload } = useAsyncData(() => issueApi.list(params), [params]);
@@ -89,7 +89,7 @@ export function IssuesPage() {
                 <th>Severity</th>
                 <th>Priority</th>
                 <th>Assignee</th>
-                <th>Modified</th>
+                <th>Created</th>
                 <th aria-label="Actions" />
               </tr>
             </thead>
@@ -103,15 +103,19 @@ export function IssuesPage() {
                     {issue.description ? <p className="muted">{truncate(issue.description, 120)}</p> : null}
                   </td>
                   <td>
-                    <StatusBadge value={issue.status_extra_info || issue.status} />
+                    <StatusBadge value={catalogBadge(issue.status_label, issue.status_color, issue.status)} />
                   </td>
-                  <td>{displayName(issue.type_extra_info || issue.issue_type || issue.type)}</td>
                   <td>
-                    <StatusBadge value={issue.severity_extra_info || issue.severity} />
+                    <StatusBadge value={catalogBadge(issue.issue_type_label, issue.issue_type_color, issue.issue_type)} />
                   </td>
-                  <td>{displayName(issue.priority_extra_info || issue.priority)}</td>
-                  <td>{displayName(issue.assigned_to_extra_info || issue.assigned_to)}</td>
-                  <td>{formatDate(issue.modified_date || issue.created_date)}</td>
+                  <td>
+                    <StatusBadge value={catalogBadge(issue.severity_label, issue.severity_color, issue.severity)} />
+                  </td>
+                  <td>
+                    <StatusBadge value={catalogBadge(issue.priority_label, issue.priority_color, issue.priority)} />
+                  </td>
+                  <td>{displayName(issue.assigned_to)}</td>
+                  <td>{formatDate(issue.created_at)}</td>
                   <td>
                     <div className="toolbar">
                       <button className="icon-button ghost" onClick={() => setEditing(issue)} title="Edit" type="button">
@@ -149,22 +153,33 @@ export function IssuesPage() {
 }
 
 function IssueEditor({ issue, onClose, onSaved }: { issue: Issue | null; onClose: () => void; onSaved: () => Promise<void> }) {
-  const [input, setInput] = useState<IssueInput>({
+  const statuses = useAsyncData(() => catalogApi.list("/statuses/"), []);
+  const priorities = useAsyncData(() => catalogApi.list("/priorities/"), []);
+  const types = useAsyncData(() => catalogApi.list("/types/"), []);
+  const severities = useAsyncData(() => catalogApi.list("/severities/"), []);
+  const [input, setInput] = useState({
     subject: issue?.subject || "",
     description: issue?.description || "",
-    issue_type: primitive(issue?.issue_type || issue?.type),
-    status: primitive(issue?.status),
-    priority: primitive(issue?.priority),
-    severity: primitive(issue?.severity)
+    issue_type: issue?.issue_type || "",
+    status: issue?.status || "",
+    priority: issue?.priority || "",
+    severity: issue?.severity || ""
   });
   const [saving, setSaving] = useState(false);
+  const catalogsLoading = statuses.loading || priorities.loading || types.loading || severities.loading;
+  const catalogError = statuses.error || priorities.error || types.error || severities.error;
+
+  async function reloadCatalogs() {
+    await Promise.all([statuses.reload(), priorities.reload(), types.reload(), severities.reload()]);
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setSaving(true);
     try {
-      if (issue) await issueApi.update(issue.id, input);
-      else await issueApi.create(input);
+      const payload = cleanIssueInput(input);
+      if (issue) await issueApi.update(issue.id, payload);
+      else await issueApi.create(payload);
       await onSaved();
     } finally {
       setSaving(false);
@@ -202,14 +217,36 @@ function IssueEditor({ issue, onClose, onSaved }: { issue: Issue | null; onClose
             onChange={(event) => setInput((current) => ({ ...current, description: event.target.value }))}
           />
         </div>
+        {catalogsLoading ? <LoadingPanel label="Loading issue fields" /> : null}
+        {catalogError ? <ErrorPanel error={catalogError} onRetry={() => void reloadCatalogs()} /> : null}
         <div className="grid three">
-          <TextField label="Type" value={input.issue_type} onChange={(value) => setInput((current) => ({ ...current, issue_type: value }))} />
-          <TextField label="Status" value={input.status} onChange={(value) => setInput((current) => ({ ...current, status: value }))} />
-          <TextField label="Priority" value={input.priority} onChange={(value) => setInput((current) => ({ ...current, priority: value }))} />
+          <SelectField
+            label="Type"
+            options={types.data}
+            value={input.issue_type}
+            onChange={(value) => setInput((current) => ({ ...current, issue_type: value }))}
+          />
+          <SelectField
+            label="Status"
+            options={statuses.data}
+            value={input.status}
+            onChange={(value) => setInput((current) => ({ ...current, status: value }))}
+          />
+          <SelectField
+            label="Priority"
+            options={priorities.data}
+            value={input.priority}
+            onChange={(value) => setInput((current) => ({ ...current, priority: value }))}
+          />
         </div>
-        <TextField label="Severity" value={input.severity} onChange={(value) => setInput((current) => ({ ...current, severity: value }))} />
+        <SelectField
+          label="Severity"
+          options={severities.data}
+          value={input.severity}
+          onChange={(value) => setInput((current) => ({ ...current, severity: value }))}
+        />
         <div className="toolbar">
-          <button className="button primary" disabled={saving} type="submit">
+          <button className="button primary" disabled={saving || catalogsLoading || Boolean(catalogError)} type="submit">
             {saving ? "Saving" : "Save issue"}
           </button>
           <button className="button secondary" onClick={onClose} type="button">
@@ -221,20 +258,53 @@ function IssueEditor({ issue, onClose, onSaved }: { issue: Issue | null; onClose
   );
 }
 
-function TextField({ label, value, onChange }: { label: string; value?: string | number; onChange: (value: string) => void }) {
+function SelectField({
+  label,
+  onChange,
+  options,
+  value
+}: {
+  label: string;
+  onChange: (value: string) => void;
+  options: CatalogItem[] | null;
+  value: string;
+}) {
   const id = label.toLowerCase().replace(/\s+/g, "-");
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <input className="input" id={id} value={value || ""} onChange={(event) => onChange(event.target.value)} />
+      <select className="select" id={id} required value={value} onChange={(event) => onChange(event.target.value)}>
+        <option value="">Select {label.toLowerCase()}</option>
+        {options?.map((option) => (
+          <option key={option.id} value={option.key || ""}>
+            {displayName(option)}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
 
-function primitive(value: unknown) {
-  if (typeof value === "string" || typeof value === "number") return value;
-  if (value && typeof value === "object" && "id" in value) return String((value as { id: unknown }).id);
-  return "";
+function cleanIssueInput(input: {
+  description: string;
+  issue_type: string;
+  priority: string;
+  severity: string;
+  status: string;
+  subject: string;
+}): IssueInput {
+  return {
+    subject: input.subject,
+    description: input.description,
+    issue_type: input.issue_type,
+    status: input.status,
+    priority: input.priority,
+    severity: input.severity
+  };
+}
+
+function catalogBadge(label?: string, color?: string, key?: string) {
+  return { color, label: label || key || "Unset" };
 }
 
 function formatDate(value?: string) {

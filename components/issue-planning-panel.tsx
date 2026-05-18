@@ -11,12 +11,11 @@ export function IssuePlanningPanel({ issueId }: { issueId: string }) {
   const deadline = useAsyncData(() => issueApi.getDeadline(issueId), [issueId]);
   const members = useAsyncData(() => issueApi.assignableMembers(issueId), [issueId]);
   const [date, setDate] = useState("");
-  const [reason, setReason] = useState("");
   const [assignee, setAssignee] = useState("");
 
   async function saveDeadline(event: FormEvent) {
     event.preventDefault();
-    await issueApi.saveDeadline(issueId, { due_date: date, deadline: date, reason });
+    await issueApi.saveDeadline(issueId, { deadline: date || null });
     await deadline.reload();
   }
 
@@ -40,17 +39,8 @@ export function IssuePlanningPanel({ issueId }: { issueId: string }) {
             className="input"
             id="deadline"
             type="date"
-            value={date || String(deadline.data?.due_date || deadline.data?.deadline || "").slice(0, 10)}
+            value={date || String(deadline.data?.deadline || "").slice(0, 10)}
             onChange={(event) => setDate(event.target.value)}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="reason">Reason</label>
-          <textarea
-            className="textarea"
-            id="reason"
-            value={reason || String(deadline.data?.reason || "")}
-            onChange={(event) => setReason(event.target.value)}
           />
         </div>
         <div className="toolbar">
