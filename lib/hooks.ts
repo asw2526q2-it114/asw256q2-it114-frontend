@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { isUnauthorized } from "@/lib/api";
+import { getStoredApiKey, subscribeToAuthChanges } from "@/lib/auth";
 
 export type LoadState<T> = {
   data: T | null;
@@ -34,5 +36,39 @@ export function useAsyncData<T>(loader: () => Promise<T>, deps: React.Dependency
     void load();
   }, [load]);
 
+  useEffect(() => {
+    // Reload when authentication changes (e.g. user switcher)
+    return subscribeToAuthChanges(() => {
+      void load();
+    });
+  }, [load]);
+
   return { ...state, reload: load };
+}
+
+export function useAuthGuard() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isPending, setIsPending] = useState<boolean>(true);
+
+  useEffect(() => {
+    const checkAuth = () => {
+      const hasKey = Boolean(getStoredApiKey());
+      setIsAuthenticated(hasKey);
+      setIsPending(false);
+
+      const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/auth");
+      if (!isAuthRoute && !hasKey) {
+        router.replace("/login");
+      } else if (isAuthRoute && hasKey) {
+        router.replace("/issues");
+      }
+    };
+
+    checkAuth();
+    return subscribeToAuthChanges(checkAuth);
+  }, [pathname, router]);
+
+  return { isAuthenticated, isPending };
 }
