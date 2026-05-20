@@ -536,6 +536,8 @@ h3 {
 
 .login-panel.single {
   grid-template-columns: 1fr;
+  max-width: 420px;
+  margin: 0 auto;
 }
 
 .login-summary {
@@ -606,7 +608,7 @@ h3 {
   background: #e1e3e4;
 }
 
-.login-form .field > span:first-child {
+.login-form .field>span:first-child {
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 600;
@@ -1398,7 +1400,7 @@ h3 {
   border-color: #a9d55d;
 }
 
-.toast.success > svg {
+.toast.success>svg {
   color: var(--success);
 }
 
@@ -1406,11 +1408,11 @@ h3 {
   border-color: #ffb4ab;
 }
 
-.toast.error > svg {
+.toast.error>svg {
   color: var(--danger);
 }
 
-.toast.info > svg {
+.toast.info>svg {
   color: var(--tertiary);
 }
 
@@ -1607,28 +1609,6 @@ h3 {
     justify-self: stretch;
   }
 
-  .auth-frame {
-    align-items: stretch;
-    padding: 0;
-  }
-
-  .login-page {
-    width: 100%;
-  }
-
-  .login-panel {
-    grid-template-columns: 1fr;
-    min-height: 100vh;
-    border: 0;
-    border-radius: 0;
-    box-shadow: none;
-  }
-
-  .login-summary,
-  .login-form {
-    padding: 16px;
-  }
-
   .mobile-bar {
     position: fixed;
     left: 0;
@@ -1662,4 +1642,13 @@ h3 {
     left: 12px;
     width: auto;
   }
+}
+
+.dropdown-item:hover {
+  background: var(--surface-muted) !important;
+}
+
+.dropdown-item.danger:hover {
+  background: var(--danger-soft) !important;
+  color: var(--danger) !important;
 }
