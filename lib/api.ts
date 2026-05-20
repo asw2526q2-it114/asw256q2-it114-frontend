@@ -183,12 +183,20 @@ export type SignupResponse = AuthSession;
 type QueryValue = string | number | boolean | null | undefined;
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const apiKey = getStoredApiKey();
+  if (!apiKey) {
+    if (typeof window !== "undefined") {
+      window.location.href = "/login";
+    }
+    throw new ApiError(401, "No active session. Please sign in.");
+  }
+
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
   if (typeof init.body === "string" && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  new Headers(getAuthHeaders()).forEach((value, key) => headers.set(key, value));
+  headers.set("X-API-Key", apiKey);
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
