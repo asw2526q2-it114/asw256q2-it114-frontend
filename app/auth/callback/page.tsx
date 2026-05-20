@@ -1,11 +1,19 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { Suspense, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, Github, LoaderCircle } from "lucide-react";
 import { storeAuthSession, type AuthSession } from "@/lib/auth";
 
 export default function AuthCallbackPage() {
+  return (
+    <Suspense fallback={<AuthCallbackPanel />}>
+      <AuthCallbackContent />
+    </Suspense>
+  );
+}
+
+function AuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const session = useMemo(() => sessionFromParams(searchParams), [searchParams]);
@@ -18,6 +26,10 @@ export default function AuthCallbackPage() {
     router.replace("/issues");
   }, [router, session]);
 
+  return <AuthCallbackPanel error={error} />;
+}
+
+function AuthCallbackPanel({ error }: { error?: string | null }) {
   return (
     <main className="login-page">
       <section className="login-panel single" aria-labelledby="callback-title">
