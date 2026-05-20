@@ -1,8 +1,10 @@
 .next/
 node_modules/
+.pnpm-store/
 out/
 dist/
 coverage/
+.venv/
 .env*.local
 npm-debug.log*
 yarn-debug.log*
