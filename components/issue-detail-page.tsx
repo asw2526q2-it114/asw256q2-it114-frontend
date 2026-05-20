@@ -24,6 +24,7 @@ import { getStoredUser } from "@/lib/auth";
 import {
   Attachment,
   Issue,
+  IssueActivity,
   IssueComment,
   UserSummary,
   displayName,
@@ -35,6 +36,7 @@ import { useAsyncData } from "@/lib/hooks";
 
 export function IssueDetailPage({ issueId }: { issueId: string }) {
   const [editing, setEditing] = useState(false);
+  const [activitiesRefreshToken, setActivitiesRefreshToken] = useState(0);
   const { data: issue, error, loading, unauthorized, reload } = useAsyncData(() => issueApi.get(issueId), [issueId]);
   const ownIssue = issue ? isCurrentUser(issue.creator) : false;
 
@@ -60,15 +62,26 @@ export function IssueDetailPage({ issueId }: { issueId: string }) {
       {unauthorized ? <AuthPending /> : null}
       {loading ? <LoadingPanel label="Loading issue" /> : null}
       {error && !unauthorized ? <ErrorPanel error={error} onRetry={reload} /> : null}
-      {issue ? <IssueWorkspace issue={issue} issueId={issueId} onIssueChanged={reload} /> : null}
+      {issue ? (
+        <IssueWorkspace
+          issue={issue}
+          issueId={issueId}
+          onIssueChanged={reload}
+          activitiesRefreshToken={activitiesRefreshToken}
+          onActivitiesRefresh={() => setActivitiesRefreshToken((token) => token + 1)}
+        />
+      ) : null}
       {issue && editing ? (
         <IssueEditor
           fallbackMembers={[]}
           issue={issue}
           onClose={() => setEditing(false)}
-          onSaved={async () => {
+          onSaved={async (result) => {
             setEditing(false);
             await reload();
+            if (result?.changed) {
+              setActivitiesRefreshToken((token) => token + 1);
+            }
           }}
         />
       ) : null}
@@ -76,7 +89,19 @@ export function IssueDetailPage({ issueId }: { issueId: string }) {
   );
 }
 
-function IssueWorkspace({ issue, issueId, onIssueChanged }: { issue: Issue; issueId: string; onIssueChanged: () => Promise<void> }) {
+function IssueWorkspace({
+  issue,
+  issueId,
+  onIssueChanged,
+  activitiesRefreshToken,
+  onActivitiesRefresh
+}: {
+  issue: Issue;
+  issueId: string;
+  onIssueChanged: () => Promise<void>;
+  activitiesRefreshToken: number;
+  onActivitiesRefresh: () => void;
+}) {
   return (
     <section className="issue-workspace">
       <div className="issue-main-column">
@@ -93,16 +118,27 @@ function IssueWorkspace({ issue, issueId, onIssueChanged }: { issue: Issue; issu
           <p className={issue.description ? "issue-description" : "muted"}>{issue.description || "No description provided."}</p>
         </section>
 
-        <AttachmentsBlock issueId={issueId} />
-        <CommentsBlock issueId={issueId} />
+        <AttachmentsBlock issueId={issueId} onAttachmentsChanged={onActivitiesRefresh} />
+        <CommentsBlock issueId={issueId} onCommentChanged={onActivitiesRefresh} />
+        <ActivitiesBlock issueId={issueId} refreshToken={activitiesRefreshToken} />
       </div>
 
-      <IssueSidebar issue={issue} issueId={issueId} onIssueChanged={onIssueChanged} />
+      <IssueSidebar issue={issue} issueId={issueId} onIssueChanged={onIssueChanged} onActivitiesRefresh={onActivitiesRefresh} />
     </section>
   );
 }
 
-function IssueSidebar({ issue, issueId, onIssueChanged }: { issue: Issue; issueId: string; onIssueChanged: () => Promise<void> }) {
+function IssueSidebar({
+  issue,
+  issueId,
+  onIssueChanged,
+  onActivitiesRefresh
+}: {
+  issue: Issue;
+  issueId: string;
+  onIssueChanged: () => Promise<void>;
+  onActivitiesRefresh: () => void;
+}) {
   const confirm = useConfirm();
   const toast = useToast();
   const members = useAsyncData(() => issueApi.assignableMembers(issueId), [issueId]);
@@ -117,6 +153,7 @@ function IssueSidebar({ issue, issueId, onIssueChanged }: { issue: Issue; issueI
       await issueApi.setAssignee(issueId, assignee ? Number(assignee) : null);
       setAssignee("");
       await Promise.all([members.reload(), onIssueChanged()]);
+      onActivitiesRefresh();
       toast.success("Assignee was updated.", "Assignee saved");
     } catch (error) {
       toast.error(error, "Unable to assign issue.");
@@ -134,6 +171,7 @@ function IssueSidebar({ issue, issueId, onIssueChanged }: { issue: Issue; issueI
           await issueApi.deleteAssignee(issueId);
           setAssignee("");
           await Promise.all([members.reload(), onIssueChanged()]);
+          onActivitiesRefresh();
           toast.success("Assignee was cleared.", "Assignee cleared");
         } catch (error) {
           toast.error(error, "Unable to clear assignee.");
@@ -148,6 +186,7 @@ function IssueSidebar({ issue, issueId, onIssueChanged }: { issue: Issue; issueI
       await issueApi.saveDeadline(issueId, { deadline: date || currentDeadline(deadline.data) || null });
       setDate("");
       await Promise.all([deadline.reload(), onIssueChanged()]);
+      onActivitiesRefresh();
       toast.success("Deadline was saved.", "Deadline saved");
     } catch (error) {
       toast.error(error, "Unable to save deadline.");
@@ -165,6 +204,7 @@ function IssueSidebar({ issue, issueId, onIssueChanged }: { issue: Issue; issueI
           await issueApi.deleteDeadline(issueId);
           setDate("");
           await Promise.all([deadline.reload(), onIssueChanged()]);
+          onActivitiesRefresh();
           toast.success("Deadline was removed.", "Deadline removed");
         } catch (error) {
           toast.error(error, "Unable to remove deadline.");
@@ -188,6 +228,7 @@ function IssueSidebar({ issue, issueId, onIssueChanged }: { issue: Issue; issueI
         toast.success("You are now watching this issue.", "Watching issue");
       }
       await watchers.reload();
+      onActivitiesRefresh();
     } catch (error) {
       toast.error(error, isWatching ? "Unable to stop watching issue." : "Unable to watch issue.");
     }
@@ -292,7 +333,7 @@ function IssueSidebar({ issue, issueId, onIssueChanged }: { issue: Issue; issueI
   );
 }
 
-function AttachmentsBlock({ issueId }: { issueId: string }) {
+function AttachmentsBlock({ issueId, onAttachmentsChanged }: { issueId: string; onAttachmentsChanged: () => void }) {
   const confirm = useConfirm();
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -307,6 +348,7 @@ function AttachmentsBlock({ issueId }: { issueId: string }) {
       await issueApi.uploadAttachments(issueId, files);
       if (inputRef.current) inputRef.current.value = "";
       await reload();
+      onAttachmentsChanged();
       toast.success(`${files.length} attachment${files.length === 1 ? "" : "s"} uploaded.`, "Upload complete");
     } catch (error) {
       toast.error(error, "Unable to upload attachment.");
@@ -325,6 +367,7 @@ function AttachmentsBlock({ issueId }: { issueId: string }) {
         try {
           await issueApi.deleteAttachment(issueId, attachment.id);
           await reload();
+          onAttachmentsChanged();
           toast.success("Attachment was deleted.", "Attachment deleted");
         } catch (error) {
           toast.error(error, "Unable to delete attachment.");
@@ -396,7 +439,7 @@ function AttachmentsBlock({ issueId }: { issueId: string }) {
   );
 }
 
-function CommentsBlock({ issueId }: { issueId: string }) {
+function CommentsBlock({ issueId, onCommentChanged }: { issueId: string; onCommentChanged: () => void }) {
   const confirm = useConfirm();
   const toast = useToast();
   const [comment, setComment] = useState("");
@@ -411,6 +454,7 @@ function CommentsBlock({ issueId }: { issueId: string }) {
       await issueApi.addComment(issueId, comment);
       setComment("");
       await reload();
+      onCommentChanged();
       toast.success("Comment was added.", "Comment saved");
     } catch (error) {
       toast.error(error, "Unable to add comment.");
@@ -424,6 +468,7 @@ function CommentsBlock({ issueId }: { issueId: string }) {
       await issueApi.updateComment(issueId, editing.id, editing.body);
       setEditing(null);
       await reload();
+      onCommentChanged();
       toast.success("Comment was updated.", "Comment saved");
     } catch (error) {
       toast.error(error, "Unable to update comment.");
@@ -440,6 +485,7 @@ function CommentsBlock({ issueId }: { issueId: string }) {
         try {
           await issueApi.deleteComment(issueId, item.id);
           await reload();
+          onCommentChanged();
           toast.success("Comment was deleted.", "Comment deleted");
         } catch (error) {
           toast.error(error, "Unable to delete comment.");
@@ -519,6 +565,140 @@ function CommentsBlock({ issueId }: { issueId: string }) {
   );
 }
 
+function ActivitiesBlock({ issueId, refreshToken }: { issueId: string; refreshToken: number }) {
+  const { data, error, loading, reload } = useAsyncData(() => issueApi.activities(issueId), [issueId, refreshToken]);
+  const activities = useMemo(() => normalizeActivities(data), [data]);
+
+  return (
+    <section className="issue-section">
+      <div className="issue-section-heading">
+        <h3>Activities</h3>
+        <span>{activities.length}</span>
+      </div>
+      {loading ? <LoadingPanel label="Loading activity" /> : null}
+      {error ? <ErrorPanel error={error} onRetry={reload} /> : null}
+      <div className="issue-item-list">
+        {activities.map((item) => (
+          <article className="issue-activity" key={item.id}>
+            <ActivityItemContent activity={item} />
+          </article>
+        ))}
+      </div>
+      {!loading && activities.length === 0 ? <p className="muted">No activity yet.</p> : null}
+    </section>
+  );
+}
+
+const CATALOG_ACTIVITY_PREFIX: Partial<Record<string, string>> = {
+  status_changed: "status",
+  issue_type_changed: "issue_type",
+  severity_changed: "severity",
+  priority_changed: "priority"
+};
+
+const TEXT_ACTIVITY_FIELDS: Partial<Record<string, { from: string; to: string }>> = {
+  subject_changed: { from: "from_subject", to: "to_subject" },
+  description_changed: { from: "from_description", to: "to_description" },
+  tags_changed: { from: "from_tags", to: "to_tags" }
+};
+
+function ActivityItemContent({ activity }: { activity: IssueActivity }) {
+  const metadata = activity.metadata || {};
+  const catalogPrefix = CATALOG_ACTIVITY_PREFIX[activity.kind];
+  const textFields = TEXT_ACTIVITY_FIELDS[activity.kind];
+  const isComment =
+    activity.kind === "comment_created" || activity.kind === "comment_updated" || activity.kind === "comment_deleted";
+
+  return (
+    <>
+      <p className="issue-activity-meta muted">
+        {displayName(activity.actor)} - {formatDate(activity.created_at)}
+      </p>
+      {catalogPrefix ? (
+        <ActivityCatalogChange metadata={metadata} prefix={catalogPrefix} summary={activity.summary} />
+      ) : isComment ? (
+        <>
+          {activity.summary ? <p className="issue-activity-summary">{activity.summary}</p> : null}
+          {stringMeta(metadata, "body") ? <p className="issue-activity-body">{stringMeta(metadata, "body")}</p> : null}
+        </>
+      ) : textFields ? (
+        <ActivityTextChange metadata={metadata} fromKey={textFields.from} toKey={textFields.to} summary={activity.summary} />
+      ) : (
+        <p className="issue-activity-summary">{activity.summary || "Activity recorded."}</p>
+      )}
+    </>
+  );
+}
+
+function ActivityCatalogChange({
+  metadata,
+  prefix,
+  summary
+}: {
+  metadata: Record<string, unknown>;
+  prefix: string;
+  summary?: string;
+}) {
+  const fromLabel = stringMeta(metadata, `from_${prefix}_label`, `from_${prefix}`);
+  const toLabel = stringMeta(metadata, `to_${prefix}_label`, `to_${prefix}`);
+
+  if (!fromLabel && !toLabel) {
+    return summary ? <p className="issue-activity-summary">{summary}</p> : null;
+  }
+
+  return (
+    <div className="issue-activity-status-change">
+      <ActivityStatusBadge
+        color={stringMeta(metadata, `from_${prefix}_color`)}
+        label={fromLabel || "Unset"}
+      />
+      <span aria-hidden="true">→</span>
+      <ActivityStatusBadge
+        color={stringMeta(metadata, `to_${prefix}_color`)}
+        label={toLabel || "Unset"}
+      />
+    </div>
+  );
+}
+
+function ActivityTextChange({
+  metadata,
+  fromKey,
+  toKey,
+  summary
+}: {
+  metadata: Record<string, unknown>;
+  fromKey: string;
+  toKey: string;
+  summary?: string;
+}) {
+  const fromValue = stringMeta(metadata, fromKey);
+  const toValue = stringMeta(metadata, toKey);
+
+  if (!fromValue && !toValue) {
+    return summary ? <p className="issue-activity-summary">{summary}</p> : null;
+  }
+
+  return (
+    <div className="issue-activity-text-change">
+      {fromValue ? <p className="issue-activity-text-value">{fromValue}</p> : null}
+      <span aria-hidden="true">→</span>
+      {toValue ? <p className="issue-activity-text-value">{toValue}</p> : null}
+    </div>
+  );
+}
+
+function ActivityStatusBadge({ color, label }: { color?: string; label: string }) {
+  return (
+    <span
+      className="issue-activity-status-badge"
+      style={color ? { borderColor: color, color } : undefined}
+    >
+      {label}
+    </span>
+  );
+}
+
 function SidebarGroup({ children, label }: { children: React.ReactNode; label: string }) {
   return (
     <section className="issue-sidebar-group">
@@ -563,6 +743,16 @@ function normalizeAttachments(value: unknown): Attachment[] {
   if (Array.isArray(value)) return value as Attachment[];
   if (value && typeof value === "object" && Array.isArray((value as Issue).attachments)) return (value as Issue).attachments || [];
   return [];
+}
+
+function normalizeActivities(value: unknown): IssueActivity[] {
+  if (Array.isArray(value)) return value as IssueActivity[];
+  return [];
+}
+
+function stringMeta(metadata: Record<string, unknown>, key: string, fallbackKey?: string) {
+  const value = metadata[key] ?? (fallbackKey ? metadata[fallbackKey] : undefined);
+  return value == null ? "" : String(value);
 }
 
 function normalizeWatchers(value: unknown): UserSummary[] {

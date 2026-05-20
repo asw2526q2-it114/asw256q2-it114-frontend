@@ -30,7 +30,7 @@ export function IssueEditor({
   fallbackMembers: UserSummary[];
   issue: Issue | null;
   onClose: () => void;
-  onSaved: () => Promise<void>;
+  onSaved: (result?: { changed: boolean }) => Promise<void>;
 }) {
   const toast = useToast();
   const statuses = useAsyncData(() => catalogApi.list("/statuses/"), []);
@@ -70,9 +70,10 @@ export function IssueEditor({
     setSaving(true);
     try {
       const payload = cleanIssueInput(input);
+      const changed = issue ? hasIssueInputChanged(issue, input) : true;
       if (issue) await issueApi.update(issue.id, payload);
       else await issueApi.create(payload);
-      await onSaved();
+      await onSaved({ changed });
       toast.success(issue ? `Issue #${issueNumber(issue)} was saved.` : "Issue was created.", issue ? "Issue saved" : "Issue created");
     } catch (error) {
       toast.error(error, issue ? "Unable to save issue." : "Unable to create issue.");
@@ -245,4 +246,22 @@ function cleanIssueInput(input: IssueEditorInput): IssueInput {
     deadline: input.deadline || null,
     tags: input.tags.trim()
   };
+}
+
+function hasIssueInputChanged(issue: Issue, input: IssueEditorInput) {
+  const payload = cleanIssueInput(input);
+  const initialAssignedTo = issue.assigned_to?.id ?? null;
+  const initialDeadline = issue.deadline ? String(issue.deadline).slice(0, 10) : null;
+
+  return (
+    payload.subject !== issue.subject ||
+    payload.description !== (issue.description || "") ||
+    payload.issue_type !== (issue.issue_type || "") ||
+    payload.status !== (issue.status || "") ||
+    payload.priority !== (issue.priority || "") ||
+    payload.severity !== (issue.severity || "") ||
+    payload.assigned_to !== initialAssignedTo ||
+    payload.deadline !== initialDeadline ||
+    payload.tags !== issueTags(issue.tags)
+  );
 }

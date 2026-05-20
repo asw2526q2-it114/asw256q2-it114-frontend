@@ -115,6 +115,36 @@ export type Attachment = {
   [key: string]: unknown;
 };
 
+export type IssueActivityKind =
+  | "status_changed"
+  | "attachment_uploaded"
+  | "attachment_deleted"
+  | "comment_created"
+  | "comment_updated"
+  | "comment_deleted"
+  | "watcher_added"
+  | "watcher_removed"
+  | "assignee_changed"
+  | "assignee_cleared"
+  | "deadline_changed"
+  | "deadline_cleared"
+  | "issue_type_changed"
+  | "severity_changed"
+  | "priority_changed"
+  | "subject_changed"
+  | "description_changed"
+  | "tags_changed";
+
+export type IssueActivity = {
+  id: string;
+  kind: IssueActivityKind | string;
+  created_at?: string;
+  actor?: UserSummary;
+  issue?: { id?: number };
+  summary?: string;
+  metadata?: Record<string, unknown>;
+};
+
 export type UserMeProfile = {
   id?: number;
   username?: string;
@@ -375,6 +405,9 @@ export const issueApi = {
   },
   deleteAttachment(issueId: string | number, attachmentId: string | number) {
     return apiFetch<void>(`/issues/${issueId}/attachments/${attachmentId}/`, { method: "DELETE" });
+  },
+  activities(id: string | number) {
+    return apiFetch<IssueActivity[]>(`/issues/${id}/activities/`);
   }
 };
 
