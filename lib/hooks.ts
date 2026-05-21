@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { isUnauthorized } from "@/lib/api";
+import { Issue, UserProfile, isUnauthorized, profileApi } from "@/lib/api";
 import { getStoredApiKey, subscribeToAuthChanges } from "@/lib/auth";
 
 export type LoadState<T> = {
@@ -46,6 +46,61 @@ export function useAsyncData<T>(loader: () => Promise<T>, deps: React.Dependency
   return { ...state, reload: load };
 }
 
+export type UserAvatarMap = Record<
+  string,
+  {
+    avatar_url?: string | null;
+    display_name?: string;
+    initials?: string;
+  }
+>;
+
+export function useAssigneeAvatarMap(issues: Issue[] | null) {
+  const [avatars, setAvatars] = useState<UserAvatarMap>({});
+  const requestedUsernames = useRef(new Set<string>());
+  const usernames = useMemo(() => {
+    const values = new Set<string>();
+    issues?.forEach((issue) => {
+      const username = issue.assigned_to?.username;
+      if (username) values.add(username);
+    });
+    return Array.from(values);
+  }, [issues]);
+
+  useEffect(() => {
+    const missing = usernames.filter((username) => !requestedUsernames.current.has(username) && !avatars[username]);
+    if (missing.length === 0) return;
+
+    let cancelled = false;
+    missing.forEach((username) => requestedUsernames.current.add(username));
+
+    void Promise.allSettled(
+      missing.map(async (username) => {
+        const response = await profileApi.get(username, {});
+        return [username, toAvatarSummary(response)] as const;
+      })
+    ).then((results) => {
+      if (cancelled) return;
+
+      const resolved = results.reduce<UserAvatarMap>((current, result) => {
+        if (result.status !== "fulfilled") return current;
+        const [username, profile] = result.value;
+        current[username] = profile;
+        return current;
+      }, {});
+
+      if (Object.keys(resolved).length === 0) return;
+      setAvatars((current) => ({ ...current, ...resolved }));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [avatars, usernames]);
+
+  return avatars;
+}
+
 export function useAuthGuard() {
   const router = useRouter();
   const pathname = usePathname();
@@ -71,4 +126,12 @@ export function useAuthGuard() {
   }, [pathname, router]);
 
   return { isAuthenticated, isPending };
+}
+
+function toAvatarSummary(profile: UserProfile) {
+  return {
+    avatar_url: profile.profile?.avatar_url,
+    display_name: profile.profile?.display_name,
+    initials: profile.profile?.initials
+  };
 }
