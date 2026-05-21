@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Issue, UserProfile, isUnauthorized, profileApi } from "@/lib/api";
-import { getStoredApiKey, subscribeToAuthChanges } from "@/lib/auth";
+import { getStoredApiKey, getStoredUser, subscribeToAuthChanges, type AuthUser } from "@/lib/auth";
 
 export type LoadState<T> = {
   data: T | null;
@@ -122,6 +122,21 @@ export function useAuthGuard() {
   }, [pathname, router]);
 
   return { isAuthenticated, isPending };
+}
+
+export function useStoredAuthUser() {
+  const [user, setUser] = useState<AuthUser | null>(null);
+
+  useEffect(() => {
+    const refresh = () => {
+      setUser(getStoredUser());
+    };
+
+    refresh();
+    return subscribeToAuthChanges(refresh);
+  }, []);
+
+  return user;
 }
 
 function toAvatarSummary(profile: UserProfile) {
