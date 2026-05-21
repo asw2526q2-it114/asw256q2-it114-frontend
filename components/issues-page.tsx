@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, KeyboardEvent, MouseEvent, useMemo, useState } from "react";
-import { Edit, Layers3, Plus, Search, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Edit, Layers3, Plus, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import { AuthPending } from "@/components/auth-pending";
 import { StatusBadge } from "@/components/badge";
 import { ErrorPanel } from "@/components/error-panel";
@@ -25,7 +25,6 @@ import {
 } from "@/lib/api";
 import { useAsyncData } from "@/lib/hooks";
 
-const sortOptions = ["created_at", "subject", "status", "priority", "severity", "assigned_to", "deadline", "pk"];
 const emptyFilters = {
   assigned_to: "",
   dir: "desc",
@@ -44,6 +43,7 @@ export function IssuesPage() {
   const [searchDraft, setSearchDraft] = useState("");
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState(emptyFilters);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [editing, setEditing] = useState<Issue | "new" | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const params = useMemo(() => ({ q: query, ...filters }), [query, filters]);
@@ -54,6 +54,7 @@ export function IssuesPage() {
   const severities = useAsyncData(() => catalogApi.list("/severities/"), []);
   const tags = useAsyncData(() => catalogApi.list("/tags/"), []);
   const memberOptions = useMemo(() => uniqueMembers(data || []), [data]);
+  const activeFilterCount = useMemo(() => countActiveFilters(filters), [filters]);
 
   async function removeIssue(issue: Issue) {
     await confirm({
@@ -134,6 +135,17 @@ export function IssuesPage() {
             <Search size={16} aria-hidden="true" />
             Search
           </button>
+          <button
+            aria-controls="issue-filters"
+            aria-expanded={filtersOpen}
+            className="button secondary"
+            onClick={() => setFiltersOpen((open) => !open)}
+            type="button"
+          >
+            <SlidersHorizontal size={16} aria-hidden="true" />
+            Filters{activeFilterCount ? ` (${activeFilterCount})` : ""}
+            {filtersOpen ? <ChevronUp size={16} aria-hidden="true" /> : <ChevronDown size={16} aria-hidden="true" />}
+          </button>
           {query ? (
             <button
               className="button secondary"
@@ -147,41 +159,34 @@ export function IssuesPage() {
             </button>
           ) : null}
         </form>
-        <div className="toolbar">
-          <CatalogFilter label="Status" options={statuses.data} value={filters.status} onChange={(value) => setFilters((current) => ({ ...current, status: value }))} />
-          <CatalogFilter label="Type" options={types.data} value={filters.issue_type} onChange={(value) => setFilters((current) => ({ ...current, issue_type: value }))} />
-          <CatalogFilter label="Severity" options={severities.data} value={filters.severity} onChange={(value) => setFilters((current) => ({ ...current, severity: value }))} />
-          <CatalogFilter label="Priority" options={priorities.data} value={filters.priority} onChange={(value) => setFilters((current) => ({ ...current, priority: value }))} />
-          <CatalogFilter label="Tag" options={tags.data} value={filters.tag} onChange={(value) => setFilters((current) => ({ ...current, tag: value }))} />
-          <select
-            className="select compact"
-            value={filters.assigned_to}
-            onChange={(event) => setFilters((current) => ({ ...current, assigned_to: event.target.value }))}
-          >
-            <option value="">Any assignee</option>
-            {memberOptions.map((member) => (
-              <option key={member.id || member.username} value={member.id}>
-                {displayName(member)}
-              </option>
-            ))}
-          </select>
-          <select className="select compact" value={filters.sort} onChange={(event) => setFilters((current) => ({ ...current, sort: event.target.value }))}>
-            {sortOptions.map((option) => (
-              <option key={option} value={option}>
-                Sort: {option}
-              </option>
-            ))}
-          </select>
-          <select className="select compact" value={filters.dir} onChange={(event) => setFilters((current) => ({ ...current, dir: event.target.value }))}>
-            <option value="desc">Descending</option>
-            <option value="asc">Ascending</option>
-          </select>
-          <button className="button secondary" onClick={() => setFilters(emptyFilters)} type="button">
-            Clear filters
-          </button>
-        </div>
-        {catalogsLoading ? <LoadingPanel label="Loading filters" /> : null}
-        {catalogError ? <ErrorPanel error={catalogError} onRetry={() => void reloadCatalogs()} /> : null}
+        {filtersOpen ? (
+          <>
+            <div className="toolbar" id="issue-filters">
+              <CatalogFilter label="Status" options={statuses.data} value={filters.status} onChange={(value) => setFilters((current) => ({ ...current, status: value }))} />
+              <CatalogFilter label="Type" options={types.data} value={filters.issue_type} onChange={(value) => setFilters((current) => ({ ...current, issue_type: value }))} />
+              <CatalogFilter label="Severity" options={severities.data} value={filters.severity} onChange={(value) => setFilters((current) => ({ ...current, severity: value }))} />
+              <CatalogFilter label="Priority" options={priorities.data} value={filters.priority} onChange={(value) => setFilters((current) => ({ ...current, priority: value }))} />
+              <CatalogFilter label="Tag" options={tags.data} value={filters.tag} onChange={(value) => setFilters((current) => ({ ...current, tag: value }))} />
+              <select
+                className="select compact"
+                value={filters.assigned_to}
+                onChange={(event) => setFilters((current) => ({ ...current, assigned_to: event.target.value }))}
+              >
+                <option value="">Any assignee</option>
+                {memberOptions.map((member) => (
+                  <option key={member.id || member.username} value={member.id}>
+                    {displayName(member)}
+                  </option>
+                ))}
+              </select>
+              <button className="button secondary" onClick={() => setFilters(emptyFilters)} type="button">
+                Clear filters
+              </button>
+            </div>
+            {catalogsLoading ? <LoadingPanel label="Loading filters" /> : null}
+            {catalogError ? <ErrorPanel error={catalogError} onRetry={() => void reloadCatalogs()} /> : null}
+          </>
+        ) : null}
       </section>
 
       {unauthorized ? <AuthPending /> : null}
@@ -539,6 +544,10 @@ function uniqueMembers(issues: Issue[]) {
     members.push(member);
   });
   return members;
+}
+
+function countActiveFilters(filters: typeof emptyFilters) {
+  return [filters.assigned_to, filters.issue_type, filters.priority, filters.severity, filters.status, filters.tag].filter(Boolean).length;
 }
 
 function catalogBadge(label?: string, color?: string, key?: string) {
