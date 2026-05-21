@@ -11,7 +11,6 @@ import {
   Save,
   Trash2,
   Upload,
-  UserMinus,
   X
 } from "lucide-react";
 import { AuthPending } from "@/components/auth-pending";
@@ -20,7 +19,7 @@ import { useConfirm, useToast } from "@/components/feedback-provider";
 import { IssueEditor } from "@/components/issue-editor";
 import { LoadingPanel } from "@/components/loading-panel";
 import { PageTitle } from "@/components/page-title";
-import { getStoredUser } from "@/lib/auth";
+import { UserMultiSelect } from "@/components/user-multi-select";
 import {
   Attachment,
   Issue,
@@ -60,8 +59,8 @@ export function IssueDetailPage({ issueId }: { issueId: string }) {
         }
       />
       {unauthorized ? <AuthPending /> : null}
-      {loading ? <LoadingPanel label="Loading issue" /> : null}
-      {error && !unauthorized ? <ErrorPanel error={error} onRetry={reload} /> : null}
+      {loading && !issue ? <LoadingPanel label="Loading issue" /> : null}
+      {error && !unauthorized && !issue ? <ErrorPanel error={error} onRetry={reload} /> : null}
       {issue ? (
         <IssueWorkspace
           issue={issue}
@@ -144,40 +143,61 @@ function IssueSidebar({
   const members = useAsyncData(() => issueApi.assignableMembers(issueId), [issueId]);
   const deadline = useAsyncData(() => issueApi.getDeadline(issueId), [issueId]);
   const watchers = useAsyncData(() => issueApi.watchers(issueId), [issueId]);
-  const [assignee, setAssignee] = useState("");
+  const [assigneeSelection, setAssigneeSelection] = useState<string | null>(null);
+  const [assigneeSaving, setAssigneeSaving] = useState(false);
+  const [watcherSelection, setWatcherSelection] = useState<string[] | null>(null);
+  const [watcherSaving, setWatcherSaving] = useState(false);
   const [date, setDate] = useState("");
-  const currentUser = getStoredUser();
 
-  async function saveAssignee() {
+  async function updateAssignee(nextAssignee: string) {
+    const currentAssignee = String(issue.assigned_to?.id || "");
+
+    if (nextAssignee === currentAssignee || assigneeSaving) {
+      setAssigneeSelection(null);
+      return;
+    }
+
+    setAssigneeSelection(nextAssignee);
+
+    if (!nextAssignee) {
+      const confirmed = await confirm({
+        title: "Clear the current assignee?",
+        description: "The issue will become unassigned.",
+        actionLabel: "Clear assignee",
+        destructive: true
+      });
+      if (!confirmed) {
+        setAssigneeSelection(null);
+        return;
+      }
+
+      setAssigneeSaving(true);
+      try {
+        await issueApi.deleteAssignee(issueId);
+        await Promise.all([members.reload(), onIssueChanged()]);
+        onActivitiesRefresh();
+        toast.success("Assignee was cleared.", "Assignee cleared");
+      } catch (error) {
+        toast.error(error, "Unable to clear assignee.");
+      } finally {
+        setAssigneeSaving(false);
+        setAssigneeSelection(null);
+      }
+      return;
+    }
+
+    setAssigneeSaving(true);
     try {
-      await issueApi.setAssignee(issueId, assignee ? Number(assignee) : null);
-      setAssignee("");
+      await issueApi.setAssignee(issueId, Number(nextAssignee));
       await Promise.all([members.reload(), onIssueChanged()]);
       onActivitiesRefresh();
       toast.success("Assignee was updated.", "Assignee saved");
     } catch (error) {
       toast.error(error, "Unable to assign issue.");
+    } finally {
+      setAssigneeSaving(false);
+      setAssigneeSelection(null);
     }
-  }
-
-  async function clearAssignee() {
-    await confirm({
-      title: "Clear the current assignee?",
-      description: "The issue will become unassigned.",
-      actionLabel: "Clear assignee",
-      destructive: true,
-      onConfirm: async () => {
-        try {
-          await issueApi.deleteAssignee(issueId);
-          setAssignee("");
-          await Promise.all([members.reload(), onIssueChanged()]);
-          onActivitiesRefresh();
-          toast.success("Assignee was cleared.", "Assignee cleared");
-        } catch (error) {
-          toast.error(error, "Unable to clear assignee.");
-        }
-      }
-    });
   }
 
   async function saveDeadline(event: FormEvent) {
@@ -214,23 +234,46 @@ function IssueSidebar({
   }
 
   const watcherList = normalizeWatchers(watchers.data);
-  const isWatching = Boolean(currentUser && watcherList.some((watcher) => watcher.id === currentUser.id || watcher.username === currentUser.username));
-  const assigneeValue = assignee || String(issue.assigned_to?.id || "");
+  const watcherValue = watcherSelection ?? watcherList.map((watcher) => String(watcher.id || watcher.username));
+  const assigneeValue = assigneeSelection ?? String(issue.assigned_to?.id || "");
 
-  async function toggleWatch() {
-    if (!currentUser) return;
+  async function syncWatchers(nextWatcherIds: string[]) {
+    const currentWatcherIds = watcherValue;
+    if (watcherSaving) return;
+
+    const addedWatcherIds = nextWatcherIds.filter((userId) => !currentWatcherIds.includes(userId));
+    const removedWatcherIds = currentWatcherIds.filter((userId) => !nextWatcherIds.includes(userId));
+    if (addedWatcherIds.length === 0 && removedWatcherIds.length === 0) return;
+
+    setWatcherSelection(nextWatcherIds);
+    setWatcherSaving(true);
     try {
-      if (isWatching) {
-        await issueApi.deleteWatcher(issueId, currentUser.id);
-        toast.success("You are no longer watching this issue.", "Watch removed");
-      } else {
-        await issueApi.addWatcher(issueId, currentUser.id);
-        toast.success("You are now watching this issue.", "Watching issue");
-      }
-      await watchers.reload();
+      const results = await Promise.allSettled([
+        ...addedWatcherIds.map((userId) => issueApi.addWatcher(issueId, Number(userId))),
+        ...removedWatcherIds.map((userId) => issueApi.deleteWatcher(issueId, Number(userId)))
+      ]);
+      const changed = results.filter((result) => result.status === "fulfilled").length;
+      const failed = results.length - changed;
+
+      await Promise.all([watchers.reload(), onIssueChanged()]);
       onActivitiesRefresh();
+      if (failed === 0) {
+        toast.success("Watchers were updated.", "Watchers updated");
+      } else if (changed > 0) {
+        toast.show({
+          message: `${changed} watcher change${changed === 1 ? "" : "s"} saved. ${failed} request${failed === 1 ? "" : "s"} failed.`,
+          title: "Partial watcher update",
+          tone: "info"
+        });
+      } else {
+        const firstError = results.find((result) => result.status === "rejected");
+        toast.error(firstError?.status === "rejected" ? firstError.reason : null, "Unable to update watchers.");
+      }
     } catch (error) {
-      toast.error(error, isWatching ? "Unable to stop watching issue." : "Unable to watch issue.");
+      toast.error(error, "Unable to update watchers.");
+    } finally {
+      setWatcherSelection(null);
+      setWatcherSaving(false);
     }
   }
 
@@ -252,11 +295,15 @@ function IssueSidebar({
       </SidebarGroup>
 
       <SidebarGroup label="Assigned to">
-        <p className="issue-sidebar-value">{displayName(issue.assigned_to)}</p>
         {members.loading ? <LoadingPanel label="Loading members" /> : null}
         {members.error && !members.unauthorized ? <ErrorPanel error={members.error} onRetry={members.reload} /> : null}
         <div className="issue-inline-form">
-          <select className="select" value={assigneeValue} onChange={(event) => setAssignee(event.target.value)}>
+          <select
+            className="select"
+            disabled={members.loading || assigneeSaving}
+            value={assigneeValue}
+            onChange={(event) => void updateAssignee(event.target.value)}
+          >
             <option value="">Unassigned</option>
             {members.data?.map((member) => (
               <option key={member.id || member.username} value={member.id}>
@@ -264,17 +311,7 @@ function IssueSidebar({
               </option>
             ))}
           </select>
-          <button className="button secondary" onClick={() => void saveAssignee()} type="button">
-            <Save size={15} aria-hidden="true" />
-            Update
-          </button>
         </div>
-        {issue.assigned_to ? (
-          <button className="button ghost issue-text-action" onClick={() => void clearAssignee()} type="button">
-            <UserMinus size={15} aria-hidden="true" />
-            Clear assignee
-          </button>
-        ) : null}
       </SidebarGroup>
 
       <SidebarGroup label="Created by">
@@ -284,20 +321,17 @@ function IssueSidebar({
       <SidebarGroup label="Watchers">
         {watchers.loading ? <LoadingPanel label="Loading watchers" /> : null}
         {watchers.error ? <ErrorPanel error={watchers.error} onRetry={watchers.reload} /> : null}
-        <div className="issue-watch-row">
-          <p className="issue-sidebar-value">{watcherList.length} watcher{watcherList.length === 1 ? "" : "s"}</p>
-          <button className="button secondary" disabled={!currentUser || watchers.loading} onClick={() => void toggleWatch()} type="button">
-            {isWatching ? "Unwatch" : "Watch"}
-          </button>
-        </div>
-        <div className="issue-chip-list">
-          {watcherList.map((watcher) => (
-            <span className="issue-chip" key={watcher.id || watcher.username}>
-              {displayName(watcher)}
-            </span>
-          ))}
-        </div>
-        {!watchers.loading && watcherList.length === 0 ? <p className="muted">No watchers yet.</p> : null}
+        <UserMultiSelect
+          disabled={members.loading || watcherSaving}
+          emptyText="No members available"
+          id="issue-watchers"
+          label="Members"
+          labelHidden
+          onChange={(nextValue) => void syncWatchers(nextValue)}
+          options={members.data || []}
+          showSelectedList={false}
+          value={watcherValue}
+        />
       </SidebarGroup>
 
       <SidebarGroup label="Deadline">
