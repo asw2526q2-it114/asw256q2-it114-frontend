@@ -90,7 +90,7 @@ export type IssueBulkCreateInput = {
   priority: string;
   status: string;
   assigned_to?: number | null;
-  tags?: string;
+  tags?: string | string[];
 };
 
 export type IssueComment = {
@@ -113,6 +113,36 @@ export type Attachment = {
   extension?: string;
   uploaded_at?: string;
   [key: string]: unknown;
+};
+
+export type IssueActivityKind =
+  | "status_changed"
+  | "attachment_uploaded"
+  | "attachment_deleted"
+  | "comment_created"
+  | "comment_updated"
+  | "comment_deleted"
+  | "watcher_added"
+  | "watcher_removed"
+  | "assignee_changed"
+  | "assignee_cleared"
+  | "deadline_changed"
+  | "deadline_cleared"
+  | "issue_type_changed"
+  | "severity_changed"
+  | "priority_changed"
+  | "subject_changed"
+  | "description_changed"
+  | "tags_changed";
+
+export type IssueActivity = {
+  id: string;
+  kind: IssueActivityKind | string;
+  created_at?: string;
+  actor?: UserSummary;
+  issue?: { id?: number };
+  summary?: string;
+  metadata?: Record<string, unknown>;
 };
 
 export type UserMeProfile = {
@@ -375,6 +405,9 @@ export const issueApi = {
   },
   deleteAttachment(issueId: string | number, attachmentId: string | number) {
     return apiFetch<void>(`/issues/${issueId}/attachments/${attachmentId}/`, { method: "DELETE" });
+  },
+  activities(id: string | number) {
+    return apiFetch<IssueActivity[]>(`/issues/${id}/activities/`);
   }
 };
 
@@ -386,14 +419,11 @@ export const profileApi = {
     return apiFetch<UserProfile>(`/users/${username}/${queryString(params)}`);
   },
   update(input: UserProfileInput) {
-    if (input.avatar || input.remove_avatar) {
-      const formData = new FormData();
-      if (input.bio !== undefined) formData.append("bio", input.bio);
-      if (input.avatar) formData.append("avatar", input.avatar);
-      if (input.remove_avatar) formData.append("remove_avatar", "true");
-      return apiFetch<UserProfile>("/users/me/", { method: "PATCH", body: formData });
-    }
-    return apiFetch<UserProfile>("/users/me/", { method: "PATCH", body: JSON.stringify(input) });
+    const formData = new FormData();
+    if (input.bio !== undefined) formData.append("bio", input.bio);
+    if (input.avatar instanceof File) formData.append("avatar", input.avatar);
+    if (input.remove_avatar) formData.append("remove_avatar", "true");
+    return apiFetch<UserProfile>("/users/me/", { method: "PATCH", body: formData });
   }
 };
 
@@ -448,8 +478,13 @@ export function isCurrentUser(user?: UserSummary | null) {
 }
 
 export function issueTags(value?: string[] | string) {
-  if (!value) return "";
-  return Array.isArray(value) ? value.join(", ") : value;
+  return issueTagList(value).join(", ");
+}
+
+export function issueTagList(value?: string[] | string) {
+  if (!value) return [];
+  const items = Array.isArray(value) ? value : value.split(",");
+  return items.map((item) => String(item).trim()).filter(Boolean);
 }
 
 async function readResponse(response: Response) {

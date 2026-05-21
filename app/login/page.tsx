@@ -1,24 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, UserRound, LoaderCircle } from "lucide-react";
+import { AlertCircle, LoaderCircle } from "lucide-react";
 import { profileApi } from "@/lib/api";
 import { useToast } from "@/components/feedback-provider";
 import { getStoredApiKey, storeAuthSession, clearAuthSession, API_KEY_STORAGE_KEY } from "@/lib/auth";
 import { TEAM_MEMBERS } from "@/lib/users";
+import { CustomSelect } from "@/components/custom-select";
 
 export default function LoginPage() {
   const router = useRouter();
   const toast = useToast();
-  const [selectedKey, setSelectedKey] = useState<string>("");
+  const [selectedKey, setSelectedKey] = useState<string>(() => getStoredApiKey() || "");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    const key = getStoredApiKey() || "";
-    setSelectedKey(key);
-  }, []);
 
   const handleUserChange = async (apiKey: string) => {
     setSelectedKey(apiKey);
@@ -70,18 +66,16 @@ export default function LoginPage() {
 
           <label className="field">
             <span>Active Profile</span>
-            <select
-              className="select"
+            <CustomSelect
               value={selectedKey}
-              onChange={(event) => handleUserChange(event.target.value)}
+              onChange={handleUserChange}
+              options={TEAM_MEMBERS.map((member) => ({
+                value: member.apiKey,
+                label: member.name,
+              }))}
               disabled={loading}
-            >
-              {TEAM_MEMBERS.map((member) => (
-                <option key={member.name} value={member.apiKey}>
-                  {member.name}
-                </option>
-              ))}
-            </select>
+              placeholder="Select active profile..."
+            />
           </label>
 
           {loading ? (

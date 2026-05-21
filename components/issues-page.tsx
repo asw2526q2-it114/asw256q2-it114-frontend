@@ -3,13 +3,16 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, KeyboardEvent, MouseEvent, useMemo, useState } from "react";
-import { Edit, Layers3, Plus, Search, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Edit, Layers3, Plus, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import { AuthPending } from "@/components/auth-pending";
 import { StatusBadge } from "@/components/badge";
 import { ErrorPanel } from "@/components/error-panel";
 import { IssueEditor } from "@/components/issue-editor";
 import { LoadingPanel } from "@/components/loading-panel";
 import { PageTitle } from "@/components/page-title";
+import { CustomSelect } from "@/components/custom-select";
+import { TagMultiSelect } from "@/components/tag-multi-select";
+import { UserAvatar } from "@/components/user-avatar";
 import { useConfirm, useToast } from "@/components/feedback-provider";
 import {
   CatalogItem,
@@ -23,9 +26,8 @@ import {
   issueNumber,
   issueTags
 } from "@/lib/api";
-import { useAsyncData } from "@/lib/hooks";
+import { useAssigneeAvatarMap, useAsyncData } from "@/lib/hooks";
 
-const sortOptions = ["created_at", "subject", "status", "priority", "severity", "assigned_to", "deadline", "pk"];
 const emptyFilters = {
   assigned_to: "",
   dir: "desc",
@@ -44,6 +46,7 @@ export function IssuesPage() {
   const [searchDraft, setSearchDraft] = useState("");
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState(emptyFilters);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [editing, setEditing] = useState<Issue | "new" | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const params = useMemo(() => ({ q: query, ...filters }), [query, filters]);
@@ -53,7 +56,10 @@ export function IssuesPage() {
   const types = useAsyncData(() => catalogApi.list("/types/"), []);
   const severities = useAsyncData(() => catalogApi.list("/severities/"), []);
   const tags = useAsyncData(() => catalogApi.list("/tags/"), []);
+  const dueDates = useAsyncData(() => catalogApi.list("/due-dates/"), []);
   const memberOptions = useMemo(() => uniqueMembers(data || []), [data]);
+  const assigneeAvatarMap = useAssigneeAvatarMap(data);
+  const activeFilterCount = useMemo(() => countActiveFilters(filters), [filters]);
 
   async function removeIssue(issue: Issue) {
     await confirm({
@@ -92,11 +98,11 @@ export function IssuesPage() {
     router.push(`/issues/${issue.id}`);
   }
 
-  const catalogsLoading = statuses.loading || priorities.loading || types.loading || severities.loading || tags.loading;
-  const catalogError = statuses.error || priorities.error || types.error || severities.error || tags.error;
+  const catalogsLoading = statuses.loading || priorities.loading || types.loading || severities.loading || tags.loading || dueDates.loading;
+  const catalogError = statuses.error || priorities.error || types.error || severities.error || tags.error || dueDates.error;
 
   async function reloadCatalogs() {
-    await Promise.all([statuses.reload(), priorities.reload(), types.reload(), severities.reload(), tags.reload()]);
+    await Promise.all([statuses.reload(), priorities.reload(), types.reload(), severities.reload(), tags.reload(), dueDates.reload()]);
   }
 
   return (
@@ -134,6 +140,17 @@ export function IssuesPage() {
             <Search size={16} aria-hidden="true" />
             Search
           </button>
+          <button
+            aria-controls="issue-filters"
+            aria-expanded={filtersOpen}
+            className="button secondary"
+            onClick={() => setFiltersOpen((open) => !open)}
+            type="button"
+          >
+            <SlidersHorizontal size={16} aria-hidden="true" />
+            Filters{activeFilterCount ? ` (${activeFilterCount})` : ""}
+            {filtersOpen ? <ChevronUp size={16} aria-hidden="true" /> : <ChevronDown size={16} aria-hidden="true" />}
+          </button>
           {query ? (
             <button
               className="button secondary"
@@ -147,41 +164,34 @@ export function IssuesPage() {
             </button>
           ) : null}
         </form>
-        <div className="toolbar">
-          <CatalogFilter label="Status" options={statuses.data} value={filters.status} onChange={(value) => setFilters((current) => ({ ...current, status: value }))} />
-          <CatalogFilter label="Type" options={types.data} value={filters.issue_type} onChange={(value) => setFilters((current) => ({ ...current, issue_type: value }))} />
-          <CatalogFilter label="Severity" options={severities.data} value={filters.severity} onChange={(value) => setFilters((current) => ({ ...current, severity: value }))} />
-          <CatalogFilter label="Priority" options={priorities.data} value={filters.priority} onChange={(value) => setFilters((current) => ({ ...current, priority: value }))} />
-          <CatalogFilter label="Tag" options={tags.data} value={filters.tag} onChange={(value) => setFilters((current) => ({ ...current, tag: value }))} />
-          <select
-            className="select compact"
-            value={filters.assigned_to}
-            onChange={(event) => setFilters((current) => ({ ...current, assigned_to: event.target.value }))}
-          >
-            <option value="">Any assignee</option>
-            {memberOptions.map((member) => (
-              <option key={member.id || member.username} value={member.id}>
-                {displayName(member)}
-              </option>
-            ))}
-          </select>
-          <select className="select compact" value={filters.sort} onChange={(event) => setFilters((current) => ({ ...current, sort: event.target.value }))}>
-            {sortOptions.map((option) => (
-              <option key={option} value={option}>
-                Sort: {option}
-              </option>
-            ))}
-          </select>
-          <select className="select compact" value={filters.dir} onChange={(event) => setFilters((current) => ({ ...current, dir: event.target.value }))}>
-            <option value="desc">Descending</option>
-            <option value="asc">Ascending</option>
-          </select>
-          <button className="button secondary" onClick={() => setFilters(emptyFilters)} type="button">
-            Clear filters
-          </button>
-        </div>
-        {catalogsLoading ? <LoadingPanel label="Loading filters" /> : null}
-        {catalogError ? <ErrorPanel error={catalogError} onRetry={() => void reloadCatalogs()} /> : null}
+        {filtersOpen ? (
+          <>
+            <div className="toolbar" id="issue-filters">
+              <CatalogFilter label="Status" options={statuses.data} value={filters.status} onChange={(value) => setFilters((current) => ({ ...current, status: value }))} />
+              <CatalogFilter label="Type" options={types.data} value={filters.issue_type} onChange={(value) => setFilters((current) => ({ ...current, issue_type: value }))} />
+              <CatalogFilter label="Severity" options={severities.data} value={filters.severity} onChange={(value) => setFilters((current) => ({ ...current, severity: value }))} />
+              <CatalogFilter label="Priority" options={priorities.data} value={filters.priority} onChange={(value) => setFilters((current) => ({ ...current, priority: value }))} />
+              <CatalogFilter label="Tag" options={tags.data} value={filters.tag} onChange={(value) => setFilters((current) => ({ ...current, tag: value }))} />
+              <CustomSelect
+                value={filters.assigned_to}
+                onChange={(value) => setFilters((current) => ({ ...current, assigned_to: value }))}
+                options={[
+                  { value: "", label: "Any assignee" },
+                  ...memberOptions.map((member) => ({
+                    value: String(member.id || ""),
+                    label: displayName(member)
+                  }))
+                ]}
+                compact
+              />
+              <button className="button secondary" onClick={() => setFilters(emptyFilters)} type="button">
+                Clear filters
+              </button>
+            </div>
+            {catalogsLoading ? <LoadingPanel label="Loading filters" /> : null}
+            {catalogError ? <ErrorPanel error={catalogError} onRetry={() => void reloadCatalogs()} /> : null}
+          </>
+        ) : null}
       </section>
 
       {unauthorized ? <AuthPending /> : null}
@@ -192,20 +202,23 @@ export function IssuesPage() {
           <table className="table">
             <thead>
               <tr>
-                <SortableHeader activeSort={filters.sort} column="pk" dir={filters.dir} label="Issue" onSort={sortBy} />
+                <SortableHeader activeSort={filters.sort} className="dot-column" column="issue_type" dir={filters.dir} label="Type" onSort={sortBy} />
+                <SortableHeader activeSort={filters.sort} className="dot-column" column="severity" dir={filters.dir} label="Severity" onSort={sortBy} />
+                <SortableHeader activeSort={filters.sort} className="dot-column" column="priority" dir={filters.dir} label="Priority" onSort={sortBy} />
+                <SortableHeader activeSort={filters.sort} className="left-align" column="pk" dir={filters.dir} label="Issue" onSort={sortBy} />
                 <SortableHeader activeSort={filters.sort} column="status" dir={filters.dir} label="Status" onSort={sortBy} />
-                <SortableHeader activeSort={filters.sort} column="issue_type" dir={filters.dir} label="Type" onSort={sortBy} />
-                <SortableHeader activeSort={filters.sort} column="severity" dir={filters.dir} label="Severity" onSort={sortBy} />
-                <SortableHeader activeSort={filters.sort} column="priority" dir={filters.dir} label="Priority" onSort={sortBy} />
                 <SortableHeader activeSort={filters.sort} column="assigned_to" dir={filters.dir} label="Assignee" onSort={sortBy} />
+                <th>Deadline</th>
                 <th>Tags</th>
                 <SortableHeader activeSort={filters.sort} column="created_at" dir={filters.dir} label="Created" onSort={sortBy} />
-                <th aria-label="Actions" />
+                <th>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
               {data.map((issue) => {
                 const ownIssue = isCurrentUser(issue.creator);
+                const assignee = issue.assigned_to;
+                const assigneeProfile = assignee?.username ? assigneeAvatarMap[assignee.username] : undefined;
                 return (
                   <tr
                     className="clickable-row"
@@ -216,25 +229,59 @@ export function IssuesPage() {
                     }}
                     tabIndex={0}
                   >
-                    <td>
+                    <td className="dot-column">
+                      <CatalogDot value={catalogBadge(issue.issue_type_label, issue.issue_type_color, issue.issue_type)} />
+                    </td>
+                    <td className="dot-column">
+                      <CatalogDot value={catalogBadge(issue.severity_label, issue.severity_color, issue.severity)} />
+                    </td>
+                    <td className="dot-column">
+                      <CatalogDot value={catalogBadge(issue.priority_label, issue.priority_color, issue.priority)} />
+                    </td>
+                    <td className="left-align">
                       <Link href={`/issues/${issue.id}`}>
                         <strong>#{issueNumber(issue)}</strong> {issue.subject}
                       </Link>
-                      {issue.description ? <p className="muted">{truncate(issue.description, 120)}</p> : null}
                     </td>
                     <td>
                       <StatusBadge value={catalogBadge(issue.status_label, issue.status_color, issue.status)} />
                     </td>
-                    <td>
-                      <StatusBadge value={catalogBadge(issue.issue_type_label, issue.issue_type_color, issue.issue_type)} />
+                    <td className="user-avatar-cell">
+                      {assignee ? (
+                        assignee.username ? (
+                          <Link
+                            aria-label={`Open ${displayName(assigneeProfile?.display_name || assignee)} profile`}
+                            href={`/profile/${assignee.username}`}
+                            title={displayName(assigneeProfile?.display_name || assignee)}
+                          >
+                            <UserAvatar
+                              avatarUrl={assigneeProfile?.avatar_url}
+                              initials={assigneeProfile?.initials}
+                              size="table"
+                              user={{
+                                ...assignee,
+                                display_name: assigneeProfile?.display_name || assignee.display_name
+                              }}
+                            />
+                          </Link>
+                        ) : (
+                          <UserAvatar
+                            avatarUrl={assigneeProfile?.avatar_url}
+                            initials={assigneeProfile?.initials}
+                            size="table"
+                            user={{
+                              ...assignee,
+                              display_name: assigneeProfile?.display_name || assignee.display_name
+                            }}
+                          />
+                        )
+                      ) : (
+                        <span className="muted">-</span>
+                      )}
                     </td>
                     <td>
-                      <StatusBadge value={catalogBadge(issue.severity_label, issue.severity_color, issue.severity)} />
+                      <DeadlineBadge deadline={issue.deadline} dueDates={dueDates.data} />
                     </td>
-                    <td>
-                      <StatusBadge value={catalogBadge(issue.priority_label, issue.priority_color, issue.priority)} />
-                    </td>
-                    <td>{displayName(issue.assigned_to)}</td>
                     <td>{issueTags(issue.tags) || "No tags"}</td>
                     <td>{formatDate(issue.created_at)}</td>
                     <td>
@@ -247,9 +294,7 @@ export function IssuesPage() {
                             <Trash2 size={16} aria-hidden="true" />
                           </button>
                         </div>
-                      ) : (
-                        <span className="muted">Owner only</span>
-                      )}
+                      ) : null}
                     </td>
                   </tr>
                 );
@@ -289,14 +334,42 @@ export function IssuesPage() {
   );
 }
 
+function CatalogDot({ value }: { value: { color?: string; label: string } }) {
+  return (
+    <span
+      aria-label={value.label}
+      className="issue-catalog-dot"
+      role="img"
+      style={{ background: value.color || "#747792" }}
+      title={value.label}
+    />
+  );
+}
+
+function DeadlineBadge({ deadline, dueDates }: { deadline?: string | null; dueDates: CatalogItem[] | null }) {
+  if (!deadline) return <span className="muted">-</span>;
+
+  const label = formatDateOnly(deadline);
+  const rule = matchingDueDateRule(deadline, dueDates || []);
+  const color = typeof rule?.color === "string" ? rule.color : "";
+
+  return (
+    <span className="badge" style={color ? { borderColor: color, color } : undefined} title={rule ? `${displayName(rule)}: ${label}` : label}>
+      {label}
+    </span>
+  );
+}
+
 function SortableHeader({
   activeSort,
+  className,
   column,
   dir,
   label,
   onSort
 }: {
   activeSort: string;
+  className?: string;
   column: string;
   dir: string;
   label: string;
@@ -304,7 +377,7 @@ function SortableHeader({
 }) {
   const active = activeSort === column;
   return (
-    <th aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}>
+    <th className={className} aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}>
       <button className={`table-sort-button ${active ? "active" : ""}`} onClick={() => onSort(column)} type="button">
         {label}
         {active ? <span aria-hidden="true">{dir === "asc" ? "▲" : "▼"}</span> : null}
@@ -319,6 +392,7 @@ function BulkInsertDialog({ fallbackMembers, onClose, onSaved }: { fallbackMembe
   const priorities = useAsyncData(() => catalogApi.list("/priorities/"), []);
   const types = useAsyncData(() => catalogApi.list("/types/"), []);
   const severities = useAsyncData(() => catalogApi.list("/severities/"), []);
+  const tags = useAsyncData(() => catalogApi.list("/tags/"), []);
   const [input, setInput] = useState({
     assigned_to: "",
     issue_type: "",
@@ -326,12 +400,12 @@ function BulkInsertDialog({ fallbackMembers, onClose, onSaved }: { fallbackMembe
     rows: "",
     severity: "",
     status: "",
-    tags: ""
+    tags: [] as string[]
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const catalogsLoading = statuses.loading || priorities.loading || types.loading || severities.loading;
-  const catalogError = statuses.error || priorities.error || types.error || severities.error;
+  const catalogsLoading = statuses.loading || priorities.loading || types.loading || severities.loading || tags.loading;
+  const catalogError = statuses.error || priorities.error || types.error || severities.error || tags.error;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -351,7 +425,7 @@ function BulkInsertDialog({ fallbackMembers, onClose, onSaved }: { fallbackMembe
         severity: input.severity,
         status: input.status,
         assigned_to: input.assigned_to ? Number(input.assigned_to) : null,
-        tags: input.tags.trim()
+        tags: input.tags
       };
       const created = await issueApi.bulkCreate(payload);
       await onSaved();
@@ -368,8 +442,13 @@ function BulkInsertDialog({ fallbackMembers, onClose, onSaved }: { fallbackMembe
     setErrors((current) => ({ ...current, [field]: "" }));
   }
 
+  function updateTags(value: string[]) {
+    setInput((current) => ({ ...current, tags: value }));
+    setErrors((current) => ({ ...current, tags: "" }));
+  }
+
   async function reloadCatalogs() {
-    await Promise.all([statuses.reload(), priorities.reload(), types.reload(), severities.reload()]);
+    await Promise.all([statuses.reload(), priorities.reload(), types.reload(), severities.reload(), tags.reload()]);
   }
 
   return (
@@ -408,21 +487,21 @@ function BulkInsertDialog({ fallbackMembers, onClose, onSaved }: { fallbackMembe
         <div className="grid two">
           <div className="field">
             <label htmlFor="bulk-assignee">Assignee</label>
-            <select className="select" id="bulk-assignee" value={input.assigned_to} onChange={(event) => updateField("assigned_to", event.target.value)}>
-              <option value="">Unassigned</option>
-              {fallbackMembers.map((member) => (
-                <option key={member.id || member.username} value={member.id}>
-                  {displayName(member)}
-                </option>
-              ))}
-            </select>
+            <CustomSelect
+              id="bulk-assignee"
+              value={input.assigned_to}
+              onChange={(value) => updateField("assigned_to", value)}
+              options={[
+                { value: "", label: "Unassigned" },
+                ...fallbackMembers.map((member) => ({
+                  value: String(member.id || ""),
+                  label: displayName(member)
+                }))
+              ]}
+            />
             <FieldError id="bulk-assignee-error" />
           </div>
-          <div className="field">
-            <label htmlFor="bulk-tags">Tags</label>
-            <input className="input" id="bulk-tags" value={input.tags} onChange={(event) => updateField("tags", event.target.value)} />
-            <FieldError id="bulk-tags-error" />
-          </div>
+          <TagMultiSelect disabled={catalogsLoading || Boolean(catalogError)} id="bulk-tags" label="Tags" options={tags.data} value={input.tags} onChange={updateTags} />
         </div>
         <div className="toolbar">
           <button className="button primary" disabled={saving || catalogsLoading || Boolean(catalogError)} type="submit">
@@ -439,15 +518,25 @@ function BulkInsertDialog({ fallbackMembers, onClose, onSaved }: { fallbackMembe
 }
 
 function CatalogFilter({ label, onChange, options, value }: { label: string; onChange: (value: string) => void; options: CatalogItem[] | null; value: string }) {
+  const customOptions = useMemo(() => {
+    const mapped = (options || []).map((option) => ({
+      value: option.key || displayName(option),
+      label: displayName(option),
+      color: option.color
+    }));
+    return [
+      { value: "", label: `Any ${label.toLowerCase()}` },
+      ...mapped
+    ];
+  }, [options, label]);
+
   return (
-    <select className="select compact" value={value} onChange={(event) => onChange(event.target.value)}>
-      <option value="">Any {label.toLowerCase()}</option>
-      {options?.map((option) => (
-        <option key={option.id} value={option.key || displayName(option)}>
-          {displayName(option)}
-        </option>
-      ))}
-    </select>
+    <CustomSelect
+      value={value}
+      onChange={onChange}
+      options={customOptions}
+      compact
+    />
   );
 }
 
@@ -467,24 +556,29 @@ function SelectField({
   value: string;
 }) {
   const id = `bulk-${field}`;
+  const customOptions = useMemo(() => {
+    const mapped = (options || []).map((option) => ({
+      value: option.key || "",
+      label: displayName(option),
+      color: option.color
+    }));
+    return [
+      { value: "", label: `Select ${label.toLowerCase()}` },
+      ...mapped
+    ];
+  }, [options, label]);
+
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <select
-        aria-describedby={error ? `${id}-error` : undefined}
-        aria-invalid={Boolean(error)}
-        className="select"
+      <CustomSelect
         id={id}
         value={value}
-        onChange={(event) => onChange(field, event.target.value)}
-      >
-        <option value="">Select {label.toLowerCase()}</option>
-        {options?.map((option) => (
-          <option key={option.id} value={option.key || ""}>
-            {displayName(option)}
-          </option>
-        ))}
-      </select>
+        onChange={(val) => onChange(field, val)}
+        options={customOptions}
+        ariaDescribedBy={error ? `${id}-error` : undefined}
+        ariaInvalid={Boolean(error)}
+      />
       <FieldError id={`${id}-error`} message={error} />
     </div>
   );
@@ -541,13 +635,74 @@ function uniqueMembers(issues: Issue[]) {
   return members;
 }
 
+function countActiveFilters(filters: typeof emptyFilters) {
+  return [filters.assigned_to, filters.issue_type, filters.priority, filters.severity, filters.status, filters.tag].filter(Boolean).length;
+}
+
 function catalogBadge(label?: string, color?: string, key?: string) {
   return { color, label: label || key || "Unset" };
+}
+
+const dayMs = 24 * 60 * 60 * 1000;
+
+function matchingDueDateRule(deadline: string, dueDates: CatalogItem[]) {
+  const deadlineDate = localDate(deadline);
+  if (!deadlineDate) return null;
+
+  const today = localDate(new Date());
+  if (!today) return null;
+  const dayDifference = daysBetween(today, deadlineDate);
+
+  if (dayDifference >= 0) {
+    const beforeRules = dueDates
+      .filter((rule) => rule.before_after === "before" && numericDays(rule) !== null && dayDifference <= Number(rule.days))
+      .sort((left, right) => Number(left.days) - Number(right.days));
+    if (beforeRules[0]) return beforeRules[0];
+  } else {
+    const daysOverdue = Math.abs(dayDifference);
+    const afterRules = dueDates
+      .filter((rule) => rule.before_after === "after" && numericDays(rule) !== null && daysOverdue >= Number(rule.days))
+      .sort((left, right) => Number(right.days) - Number(left.days));
+    if (afterRules[0]) return afterRules[0];
+  }
+
+  return dueDates.find((rule) => !rule.before_after) || null;
+}
+
+function numericDays(rule: CatalogItem) {
+  if (rule.days === null || rule.days === undefined) return null;
+  const days = Number(rule.days);
+  return Number.isFinite(days) ? days : null;
 }
 
 function formatDate(value?: string) {
   if (!value) return "Not set";
   return new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
+function formatDateOnly(value?: string | null) {
+  const date = localDate(value);
+  if (!date) return "Not set";
+  return new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(date);
+}
+
+function localDate(value?: Date | string | null) {
+  if (!value) return null;
+  if (value instanceof Date) return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+
+  const text = String(value);
+  const dateOnly = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (dateOnly) return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]));
+
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function daysBetween(left: Date, right: Date) {
+  const leftTime = Date.UTC(left.getFullYear(), left.getMonth(), left.getDate());
+  const rightTime = Date.UTC(right.getFullYear(), right.getMonth(), right.getDate());
+  return Math.round((rightTime - leftTime) / dayMs);
 }
 
 function truncate(value: string, max: number) {
