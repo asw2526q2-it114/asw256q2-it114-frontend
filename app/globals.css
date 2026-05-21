@@ -552,11 +552,12 @@ h3 {
   font-weight: 700;
   letter-spacing: 0.05em;
   line-height: 16px;
-  text-align: left;
+  text-align: center;
   text-transform: uppercase;
   white-space: nowrap;
   padding: 12px;
   border-bottom: 1px solid #e1e3e4;
+  vertical-align: middle;
 }
 
 .table-sort-button {
@@ -565,6 +566,8 @@ h3 {
   color: inherit;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  width: 100%;
   gap: 5px;
   font: inherit;
   letter-spacing: inherit;
@@ -612,7 +615,21 @@ h3 {
 .table td {
   padding: 12px;
   border-bottom: 1px solid #edeeef;
-  vertical-align: top;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.table td.left-align,
+.table th.left-align {
+  text-align: left;
+}
+
+.table th.left-align .table-sort-button {
+  justify-content: flex-start;
+}
+
+.table td .toolbar {
+  justify-content: center;
 }
 
 .table tr:hover td {

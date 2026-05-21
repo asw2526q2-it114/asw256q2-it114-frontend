@@ -204,13 +204,13 @@ export function IssuesPage() {
                 <SortableHeader activeSort={filters.sort} className="dot-column" column="issue_type" dir={filters.dir} label="Type" onSort={sortBy} />
                 <SortableHeader activeSort={filters.sort} className="dot-column" column="severity" dir={filters.dir} label="Severity" onSort={sortBy} />
                 <SortableHeader activeSort={filters.sort} className="dot-column" column="priority" dir={filters.dir} label="Priority" onSort={sortBy} />
-                <SortableHeader activeSort={filters.sort} column="pk" dir={filters.dir} label="Issue" onSort={sortBy} />
+                <SortableHeader activeSort={filters.sort} className="left-align" column="pk" dir={filters.dir} label="Issue" onSort={sortBy} />
                 <SortableHeader activeSort={filters.sort} column="status" dir={filters.dir} label="Status" onSort={sortBy} />
                 <SortableHeader activeSort={filters.sort} column="assigned_to" dir={filters.dir} label="Assignee" onSort={sortBy} />
                 <th>Deadline</th>
                 <th>Tags</th>
                 <SortableHeader activeSort={filters.sort} column="created_at" dir={filters.dir} label="Created" onSort={sortBy} />
-                <th aria-label="Actions" />
+                <th>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
@@ -237,11 +237,10 @@ export function IssuesPage() {
                     <td className="dot-column">
                       <CatalogDot value={catalogBadge(issue.priority_label, issue.priority_color, issue.priority)} />
                     </td>
-                    <td>
+                    <td className="left-align">
                       <Link href={`/issues/${issue.id}`}>
                         <strong>#{issueNumber(issue)}</strong> {issue.subject}
                       </Link>
-                      {issue.description ? <p className="muted">{truncate(issue.description, 120)}</p> : null}
                     </td>
                     <td>
                       <StatusBadge value={catalogBadge(issue.status_label, issue.status_color, issue.status)} />
@@ -276,7 +275,7 @@ export function IssuesPage() {
                           />
                         )
                       ) : (
-                        <span className="muted">Unassigned</span>
+                        <span className="muted">-</span>
                       )}
                     </td>
                     <td>
@@ -294,9 +293,7 @@ export function IssuesPage() {
                             <Trash2 size={16} aria-hidden="true" />
                           </button>
                         </div>
-                      ) : (
-                        <span className="muted">Owner only</span>
-                      )}
+                      ) : null}
                     </td>
                   </tr>
                 );
@@ -349,7 +346,7 @@ function CatalogDot({ value }: { value: { color?: string; label: string } }) {
 }
 
 function DeadlineBadge({ deadline, dueDates }: { deadline?: string | null; dueDates: CatalogItem[] | null }) {
-  if (!deadline) return <span className="muted">Not set</span>;
+  if (!deadline) return <span className="muted">-</span>;
 
   const label = formatDateOnly(deadline);
   const rule = matchingDueDateRule(deadline, dueDates || []);
