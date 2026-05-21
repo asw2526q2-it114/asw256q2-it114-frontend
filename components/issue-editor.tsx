@@ -1,11 +1,12 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { CatalogItem, Issue, IssueInput, UserSummary, catalogApi, displayName, issueApi, issueNumber, issueTags } from "@/lib/api";
+import { CatalogItem, Issue, IssueInput, UserSummary, catalogApi, displayName, issueApi, issueNumber, issueTagList, issueTags } from "@/lib/api";
 import { useAsyncData } from "@/lib/hooks";
 import { ErrorPanel } from "@/components/error-panel";
 import { useToast } from "@/components/feedback-provider";
 import { LoadingPanel } from "@/components/loading-panel";
+import { TagMultiSelect } from "@/components/tag-multi-select";
 
 type IssueEditorInput = {
   assigned_to: string;
@@ -16,10 +17,11 @@ type IssueEditorInput = {
   severity: string;
   status: string;
   subject: string;
-  tags: string;
+  tags: string[];
 };
 
 type IssueEditorErrors = Partial<Record<keyof IssueEditorInput, string>>;
+type IssueEditorTextField = Exclude<keyof IssueEditorInput, "tags">;
 
 export function IssueEditor({
   fallbackMembers,
@@ -37,6 +39,7 @@ export function IssueEditor({
   const priorities = useAsyncData(() => catalogApi.list("/priorities/"), []);
   const types = useAsyncData(() => catalogApi.list("/types/"), []);
   const severities = useAsyncData(() => catalogApi.list("/severities/"), []);
+  const tags = useAsyncData(() => catalogApi.list("/tags/"), []);
   const members = useAsyncData(() => (issue ? issueApi.assignableMembers(issue.id) : Promise.resolve(fallbackMembers)), [issue?.id, fallbackMembers]);
   const [input, setInput] = useState<IssueEditorInput>({
     assigned_to: issue?.assigned_to?.id ? String(issue.assigned_to.id) : "",
@@ -47,15 +50,15 @@ export function IssueEditor({
     severity: issue?.severity || "",
     status: issue?.status || "",
     subject: issue?.subject || "",
-    tags: issueTags(issue?.tags)
+    tags: issueTagList(issue?.tags)
   });
   const [errors, setErrors] = useState<IssueEditorErrors>({});
   const [saving, setSaving] = useState(false);
-  const catalogsLoading = statuses.loading || priorities.loading || types.loading || severities.loading || members.loading;
-  const catalogError = statuses.error || priorities.error || types.error || severities.error || members.error;
+  const catalogsLoading = statuses.loading || priorities.loading || types.loading || severities.loading || tags.loading || members.loading;
+  const catalogError = statuses.error || priorities.error || types.error || severities.error || tags.error || members.error;
 
   async function reloadCatalogs() {
-    await Promise.all([statuses.reload(), priorities.reload(), types.reload(), severities.reload(), members.reload()]);
+    await Promise.all([statuses.reload(), priorities.reload(), types.reload(), severities.reload(), tags.reload(), members.reload()]);
   }
 
   async function submit(event: FormEvent) {
@@ -82,9 +85,14 @@ export function IssueEditor({
     }
   }
 
-  function updateField(field: keyof IssueEditorInput, value: string) {
+  function updateField(field: IssueEditorTextField, value: string) {
     setInput((current) => ({ ...current, [field]: value }));
     setErrors((current) => ({ ...current, [field]: undefined }));
+  }
+
+  function updateTags(value: string[]) {
+    setInput((current) => ({ ...current, tags: value }));
+    setErrors((current) => ({ ...current, tags: undefined }));
   }
 
   return (
@@ -142,11 +150,7 @@ export function IssueEditor({
             <FieldError id="issue-editor-deadline-error" />
           </div>
         </div>
-        <div className="field">
-          <label htmlFor="issue-editor-tags">Tags</label>
-          <input className="input" id="issue-editor-tags" placeholder="Comma-separated tags" value={input.tags} onChange={(event) => updateField("tags", event.target.value)} />
-          <FieldError id="issue-editor-tags-error" />
-        </div>
+        <TagMultiSelect disabled={catalogsLoading || Boolean(catalogError)} id="issue-editor-tags" label="Tags" options={tags.data} value={input.tags} onChange={updateTags} />
         <div className="toolbar">
           <button className="button primary" disabled={saving || catalogsLoading || Boolean(catalogError)} type="submit">
             {saving ? "Saving" : "Save issue"}
@@ -169,9 +173,9 @@ function SelectField({
   value
 }: {
   error?: string;
-  field: keyof IssueEditorInput;
+  field: IssueEditorTextField;
   label: string;
-  onChange: (field: keyof IssueEditorInput, value: string) => void;
+  onChange: (field: IssueEditorTextField, value: string) => void;
   options: CatalogItem[] | null;
   value: string;
 }) {
@@ -209,7 +213,7 @@ function FieldError({ id, message }: { id: string; message?: string }) {
 
 function validateIssueInput(input: IssueEditorInput) {
   const errors: IssueEditorErrors = {};
-  const required: Array<[keyof IssueEditorInput, string]> = [
+  const required: Array<[IssueEditorTextField, string]> = [
     ["subject", "Subject is required."],
     ["issue_type", "Type is required."],
     ["status", "Status is required."],
@@ -229,7 +233,7 @@ function validateIssueInput(input: IssueEditorInput) {
   return { errors, firstInvalid };
 }
 
-function focusField(field: keyof IssueEditorInput) {
+function focusField(field: IssueEditorTextField) {
   const element = document.getElementById(`issue-editor-${field}`);
   if (element instanceof HTMLElement) element.focus();
 }
@@ -244,7 +248,7 @@ function cleanIssueInput(input: IssueEditorInput): IssueInput {
     severity: input.severity,
     assigned_to: input.assigned_to ? Number(input.assigned_to) : null,
     deadline: input.deadline || null,
-    tags: input.tags.trim()
+    tags: input.tags
   };
 }
 
@@ -262,6 +266,6 @@ function hasIssueInputChanged(issue: Issue, input: IssueEditorInput) {
     payload.severity !== (issue.severity || "") ||
     payload.assigned_to !== initialAssignedTo ||
     payload.deadline !== initialDeadline ||
-    payload.tags !== issueTags(issue.tags)
+    issueTags(payload.tags) !== issueTags(issue.tags)
   );
 }
