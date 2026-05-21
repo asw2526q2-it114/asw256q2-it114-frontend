@@ -578,7 +578,9 @@ function CommentsBlock({ issueId, onCommentChanged }: { issueId: string; onComme
                 <>
                   <p>{item.body || "Empty comment"}</p>
                   <p className="muted">
-                    {displayName(item.creator)} - {formatDate(item.created_at)}
+                    <UserNameLink user={item.creator} />
+                    {" - "}
+                    {formatDate(item.created_at)}
                   </p>
                   {ownComment ? (
                     <div className="toolbar">
@@ -648,7 +650,9 @@ function ActivityItemContent({ activity }: { activity: IssueActivity }) {
   return (
     <>
       <p className="issue-activity-meta muted">
-        {displayName(activity.actor)} - {formatDate(activity.created_at)}
+        <UserNameLink user={activity.actor} />
+        {" - "}
+        {formatDate(activity.created_at)}
       </p>
       {catalogPrefix ? (
         <ActivityCatalogChange metadata={metadata} prefix={catalogPrefix} summary={activity.summary} />
@@ -758,9 +762,23 @@ function UserLine({ user }: { user?: UserSummary | null }) {
   return (
     <span className="issue-user-line">
       <span aria-hidden="true">{initials(name)}</span>
-      {name}
+      <UserNameLink user={user} />
     </span>
   );
+}
+
+function UserNameLink({ user }: { user?: UserSummary | null }) {
+  const name = displayName(user);
+
+  if (user?.username) {
+    return (
+      <Link href={`/profile/${user.username}`} title={`Open ${name} profile`}>
+        {name}
+      </Link>
+    );
+  }
+
+  return <>{name}</>;
 }
 
 function currentDeadline(value: unknown) {
