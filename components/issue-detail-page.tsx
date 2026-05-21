@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { CustomSelect } from "@/components/custom-select";
 import {
   AlertTriangle,
@@ -606,9 +606,22 @@ function CommentsBlock({ issueId, onCommentChanged }: { issueId: string; onComme
   );
 }
 
+const ACTIVITIES_PREVIEW_LIMIT = 5;
+
 function ActivitiesBlock({ issueId, refreshToken }: { issueId: string; refreshToken: number }) {
   const { data, error, loading, reload } = useAsyncData(() => issueApi.activities(issueId), [issueId, refreshToken]);
   const activities = useMemo(() => normalizeActivities(data), [data]);
+  const [showAll, setShowAll] = useState(false);
+
+  useEffect(() => {
+    setShowAll(false);
+  }, [issueId]);
+
+  const visibleActivities =
+    showAll || activities.length <= ACTIVITIES_PREVIEW_LIMIT
+      ? activities
+      : activities.slice(0, ACTIVITIES_PREVIEW_LIMIT);
+  const hasMore = activities.length > ACTIVITIES_PREVIEW_LIMIT && !showAll;
 
   return (
     <section className="issue-section">
@@ -619,12 +632,17 @@ function ActivitiesBlock({ issueId, refreshToken }: { issueId: string; refreshTo
       {loading ? <LoadingPanel label="Loading activity" /> : null}
       {error ? <ErrorPanel error={error} onRetry={reload} /> : null}
       <div className="issue-item-list">
-        {activities.map((item) => (
+        {visibleActivities.map((item) => (
           <article className="issue-activity" key={item.id}>
             <ActivityItemContent activity={item} />
           </article>
         ))}
       </div>
+      {hasMore ? (
+        <button className="button ghost issue-text-action issue-section-more" onClick={() => setShowAll(true)} type="button">
+          See more
+        </button>
+      ) : null}
       {!loading && activities.length === 0 ? <p className="muted">No activity yet.</p> : null}
     </section>
   );
