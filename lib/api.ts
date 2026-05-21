@@ -419,14 +419,11 @@ export const profileApi = {
     return apiFetch<UserProfile>(`/users/${username}/${queryString(params)}`);
   },
   update(input: UserProfileInput) {
-    if (input.avatar || input.remove_avatar) {
-      const formData = new FormData();
-      if (input.bio !== undefined) formData.append("bio", input.bio);
-      if (input.avatar) formData.append("avatar", input.avatar);
-      if (input.remove_avatar) formData.append("remove_avatar", "true");
-      return apiFetch<UserProfile>("/users/me/", { method: "PATCH", body: formData });
-    }
-    return apiFetch<UserProfile>("/users/me/", { method: "PATCH", body: JSON.stringify(input) });
+    const formData = new FormData();
+    if (input.bio !== undefined) formData.append("bio", input.bio);
+    if (input.avatar instanceof File) formData.append("avatar", input.avatar);
+    if (input.remove_avatar) formData.append("remove_avatar", "true");
+    return apiFetch<UserProfile>("/users/me/", { method: "PATCH", body: formData });
   }
 };
 
