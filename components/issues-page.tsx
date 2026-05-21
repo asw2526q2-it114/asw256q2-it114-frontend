@@ -10,6 +10,7 @@ import { ErrorPanel } from "@/components/error-panel";
 import { IssueEditor } from "@/components/issue-editor";
 import { LoadingPanel } from "@/components/loading-panel";
 import { PageTitle } from "@/components/page-title";
+import { TagMultiSelect } from "@/components/tag-multi-select";
 import { useConfirm, useToast } from "@/components/feedback-provider";
 import {
   CatalogItem,
@@ -53,6 +54,7 @@ export function IssuesPage() {
   const types = useAsyncData(() => catalogApi.list("/types/"), []);
   const severities = useAsyncData(() => catalogApi.list("/severities/"), []);
   const tags = useAsyncData(() => catalogApi.list("/tags/"), []);
+  const dueDates = useAsyncData(() => catalogApi.list("/due-dates/"), []);
   const memberOptions = useMemo(() => uniqueMembers(data || []), [data]);
   const activeFilterCount = useMemo(() => countActiveFilters(filters), [filters]);
 
@@ -93,11 +95,11 @@ export function IssuesPage() {
     router.push(`/issues/${issue.id}`);
   }
 
-  const catalogsLoading = statuses.loading || priorities.loading || types.loading || severities.loading || tags.loading;
-  const catalogError = statuses.error || priorities.error || types.error || severities.error || tags.error;
+  const catalogsLoading = statuses.loading || priorities.loading || types.loading || severities.loading || tags.loading || dueDates.loading;
+  const catalogError = statuses.error || priorities.error || types.error || severities.error || tags.error || dueDates.error;
 
   async function reloadCatalogs() {
-    await Promise.all([statuses.reload(), priorities.reload(), types.reload(), severities.reload(), tags.reload()]);
+    await Promise.all([statuses.reload(), priorities.reload(), types.reload(), severities.reload(), tags.reload(), dueDates.reload()]);
   }
 
   return (
@@ -203,6 +205,7 @@ export function IssuesPage() {
                 <SortableHeader activeSort={filters.sort} column="pk" dir={filters.dir} label="Issue" onSort={sortBy} />
                 <SortableHeader activeSort={filters.sort} column="status" dir={filters.dir} label="Status" onSort={sortBy} />
                 <SortableHeader activeSort={filters.sort} column="assigned_to" dir={filters.dir} label="Assignee" onSort={sortBy} />
+                <th>Deadline</th>
                 <th>Tags</th>
                 <SortableHeader activeSort={filters.sort} column="created_at" dir={filters.dir} label="Created" onSort={sortBy} />
                 <th aria-label="Actions" />
@@ -240,6 +243,9 @@ export function IssuesPage() {
                       <StatusBadge value={catalogBadge(issue.status_label, issue.status_color, issue.status)} />
                     </td>
                     <td>{displayName(issue.assigned_to)}</td>
+                    <td>
+                      <DeadlineBadge deadline={issue.deadline} dueDates={dueDates.data} />
+                    </td>
                     <td>{issueTags(issue.tags) || "No tags"}</td>
                     <td>{formatDate(issue.created_at)}</td>
                     <td>
@@ -306,6 +312,20 @@ function CatalogDot({ value }: { value: { color?: string; label: string } }) {
   );
 }
 
+function DeadlineBadge({ deadline, dueDates }: { deadline?: string | null; dueDates: CatalogItem[] | null }) {
+  if (!deadline) return <span className="muted">Not set</span>;
+
+  const label = formatDateOnly(deadline);
+  const rule = matchingDueDateRule(deadline, dueDates || []);
+  const color = typeof rule?.color === "string" ? rule.color : "";
+
+  return (
+    <span className="badge" style={color ? { borderColor: color, color } : undefined} title={rule ? `${displayName(rule)}: ${label}` : label}>
+      {label}
+    </span>
+  );
+}
+
 function SortableHeader({
   activeSort,
   className,
@@ -338,6 +358,7 @@ function BulkInsertDialog({ fallbackMembers, onClose, onSaved }: { fallbackMembe
   const priorities = useAsyncData(() => catalogApi.list("/priorities/"), []);
   const types = useAsyncData(() => catalogApi.list("/types/"), []);
   const severities = useAsyncData(() => catalogApi.list("/severities/"), []);
+  const tags = useAsyncData(() => catalogApi.list("/tags/"), []);
   const [input, setInput] = useState({
     assigned_to: "",
     issue_type: "",
@@ -345,12 +366,12 @@ function BulkInsertDialog({ fallbackMembers, onClose, onSaved }: { fallbackMembe
     rows: "",
     severity: "",
     status: "",
-    tags: ""
+    tags: [] as string[]
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const catalogsLoading = statuses.loading || priorities.loading || types.loading || severities.loading;
-  const catalogError = statuses.error || priorities.error || types.error || severities.error;
+  const catalogsLoading = statuses.loading || priorities.loading || types.loading || severities.loading || tags.loading;
+  const catalogError = statuses.error || priorities.error || types.error || severities.error || tags.error;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -370,7 +391,7 @@ function BulkInsertDialog({ fallbackMembers, onClose, onSaved }: { fallbackMembe
         severity: input.severity,
         status: input.status,
         assigned_to: input.assigned_to ? Number(input.assigned_to) : null,
-        tags: input.tags.trim()
+        tags: input.tags
       };
       const created = await issueApi.bulkCreate(payload);
       await onSaved();
@@ -387,8 +408,13 @@ function BulkInsertDialog({ fallbackMembers, onClose, onSaved }: { fallbackMembe
     setErrors((current) => ({ ...current, [field]: "" }));
   }
 
+  function updateTags(value: string[]) {
+    setInput((current) => ({ ...current, tags: value }));
+    setErrors((current) => ({ ...current, tags: "" }));
+  }
+
   async function reloadCatalogs() {
-    await Promise.all([statuses.reload(), priorities.reload(), types.reload(), severities.reload()]);
+    await Promise.all([statuses.reload(), priorities.reload(), types.reload(), severities.reload(), tags.reload()]);
   }
 
   return (
@@ -437,11 +463,7 @@ function BulkInsertDialog({ fallbackMembers, onClose, onSaved }: { fallbackMembe
             </select>
             <FieldError id="bulk-assignee-error" />
           </div>
-          <div className="field">
-            <label htmlFor="bulk-tags">Tags</label>
-            <input className="input" id="bulk-tags" value={input.tags} onChange={(event) => updateField("tags", event.target.value)} />
-            <FieldError id="bulk-tags-error" />
-          </div>
+          <TagMultiSelect disabled={catalogsLoading || Boolean(catalogError)} id="bulk-tags" label="Tags" options={tags.data} value={input.tags} onChange={updateTags} />
         </div>
         <div className="toolbar">
           <button className="button primary" disabled={saving || catalogsLoading || Boolean(catalogError)} type="submit">
@@ -568,9 +590,66 @@ function catalogBadge(label?: string, color?: string, key?: string) {
   return { color, label: label || key || "Unset" };
 }
 
+const dayMs = 24 * 60 * 60 * 1000;
+
+function matchingDueDateRule(deadline: string, dueDates: CatalogItem[]) {
+  const deadlineDate = localDate(deadline);
+  if (!deadlineDate) return null;
+
+  const today = localDate(new Date());
+  if (!today) return null;
+  const dayDifference = daysBetween(today, deadlineDate);
+
+  if (dayDifference >= 0) {
+    const beforeRules = dueDates
+      .filter((rule) => rule.before_after === "before" && numericDays(rule) !== null && dayDifference <= Number(rule.days))
+      .sort((left, right) => Number(left.days) - Number(right.days));
+    if (beforeRules[0]) return beforeRules[0];
+  } else {
+    const daysOverdue = Math.abs(dayDifference);
+    const afterRules = dueDates
+      .filter((rule) => rule.before_after === "after" && numericDays(rule) !== null && daysOverdue >= Number(rule.days))
+      .sort((left, right) => Number(right.days) - Number(left.days));
+    if (afterRules[0]) return afterRules[0];
+  }
+
+  return dueDates.find((rule) => !rule.before_after) || null;
+}
+
+function numericDays(rule: CatalogItem) {
+  if (rule.days === null || rule.days === undefined) return null;
+  const days = Number(rule.days);
+  return Number.isFinite(days) ? days : null;
+}
+
 function formatDate(value?: string) {
   if (!value) return "Not set";
   return new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
+function formatDateOnly(value?: string | null) {
+  const date = localDate(value);
+  if (!date) return "Not set";
+  return new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(date);
+}
+
+function localDate(value?: Date | string | null) {
+  if (!value) return null;
+  if (value instanceof Date) return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+
+  const text = String(value);
+  const dateOnly = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (dateOnly) return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]));
+
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function daysBetween(left: Date, right: Date) {
+  const leftTime = Date.UTC(left.getFullYear(), left.getMonth(), left.getDate());
+  const rightTime = Date.UTC(right.getFullYear(), right.getMonth(), right.getDate());
+  return Math.round((rightTime - leftTime) / dayMs);
 }
 
 function truncate(value: string, max: number) {

@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
-import { Edit, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Edit, Plus, Trash2 } from "lucide-react";
 import { AuthPending } from "@/components/auth-pending";
 import { ErrorPanel } from "@/components/error-panel";
 import { LoadingPanel } from "@/components/loading-panel";
 import { PageTitle } from "@/components/page-title";
-import { useConfirm, useToast } from "@/components/feedback-provider";
+import { useToast } from "@/components/feedback-provider";
 import { CatalogItem, catalogApi, displayName, getCatalogResource } from "@/lib/api";
 import { useAsyncData } from "@/lib/hooks";
 
@@ -26,7 +26,6 @@ type ResourceUiConfig = {
   columns: FieldName[];
   defaults: Record<string, string | boolean>;
   editable: FieldConfig[];
-  requiresReplacement?: boolean;
   titleField: FieldName;
 };
 
@@ -41,12 +40,11 @@ const resourceUi: Record<string, ResourceUiConfig> = {
       colorField,
       { name: "is_closed", label: "Closed status", type: "checkbox" }
     ],
-    requiresReplacement: true,
     titleField: "label"
   },
   priorities: colorSettingConfig("Priority"),
   types: colorSettingConfig("Type"),
-  severities: { ...colorSettingConfig("Severity"), requiresReplacement: true },
+  severities: colorSettingConfig("Severity"),
   tags: {
     columns: ["label"],
     defaults: { label: "" },
@@ -76,35 +74,14 @@ const resourceUi: Record<string, ResourceUiConfig> = {
 };
 
 export function SettingsResourcePage({ resourceKey }: { resourceKey: string }) {
-  const confirm = useConfirm();
   const toast = useToast();
   const resource = getCatalogResource(resourceKey);
   const ui = resourceUi[resource.key] || resourceUi.statuses;
-  const showKey = resource.key !== "due-dates";
   const [editing, setEditing] = useState<CatalogItem | "new" | null>(null);
   const [deleting, setDeleting] = useState<CatalogItem | null>(null);
   const { data, error, loading, unauthorized, reload } = useAsyncData(() => catalogApi.list(resource.path), [resource.path]);
 
-  async function remove(item: CatalogItem, replacement?: string) {
-    if (!ui.requiresReplacement) {
-      await confirm({
-        title: `Delete ${resource.singular.toLowerCase()} "${itemTitle(item, ui)}"?`,
-        description: `This removes the ${resource.singular.toLowerCase()} from settings.`,
-        actionLabel: "Delete",
-        destructive: true,
-        onConfirm: async () => {
-          try {
-            await catalogApi.remove(resource.path, item.id);
-            toast.success(`${resource.singular} was deleted.`, "Setting deleted");
-            setDeleting(null);
-            await reload();
-          } catch (error) {
-            toast.error(error, `Unable to delete ${resource.singular.toLowerCase()}.`);
-          }
-        }
-      });
-      return;
-    }
+  async function remove(item: CatalogItem, replacement: string) {
     try {
       await catalogApi.remove(resource.path, item.id, { replacement });
       toast.success(`${resource.singular} was deleted.`, "Setting deleted");
@@ -125,7 +102,8 @@ export function SettingsResourcePage({ resourceKey }: { resourceKey: string }) {
         actions={
           <>
             <Link className="button secondary" href="/settings">
-              Settings hub
+              <ArrowLeft size={16} aria-hidden="true" />
+              Back to settings
             </Link>
             <button className="button primary" onClick={() => setEditing("new")} type="button">
               <Plus size={16} aria-hidden="true" />
@@ -146,7 +124,6 @@ export function SettingsResourcePage({ resourceKey }: { resourceKey: string }) {
                 {ui.columns.map((column) => (
                   <th key={column}>{columnLabel(column)}</th>
                 ))}
-                {showKey ? <th>Key</th> : null}
                 <th>Created</th>
                 <th aria-label="Actions" />
               </tr>
@@ -158,14 +135,13 @@ export function SettingsResourcePage({ resourceKey }: { resourceKey: string }) {
                   {ui.columns.map((column) => (
                     <td key={column}>{renderField(item, column)}</td>
                   ))}
-                  {showKey ? <td>{item.key || "Not set"}</td> : null}
                   <td>{formatDate(item.created_at)}</td>
                   <td>
                     <span className="toolbar">
                       <button className="icon-button ghost" onClick={() => setEditing(item)} title="Edit" type="button">
                         <Edit size={16} aria-hidden="true" />
                       </button>
-                      <button className="icon-button danger" onClick={() => (ui.requiresReplacement ? setDeleting(item) : void remove(item))} title="Delete" type="button">
+                      <button className="icon-button danger" onClick={() => setDeleting(item)} title="Delete" type="button">
                         <Trash2 size={16} aria-hidden="true" />
                       </button>
                     </span>
