@@ -8,7 +8,8 @@ import { ErrorPanel } from "@/components/error-panel";
 import { useConfirm, useToast } from "@/components/feedback-provider";
 import { LoadingPanel } from "@/components/loading-panel";
 import { IssueComment, UserMeIssueSummary, UserProfile, displayName, isCurrentUser, issueApi, profileApi } from "@/lib/api";
-import { useAsyncData } from "@/lib/hooks";
+import { useAsyncData, useStoredAuthUser } from "@/lib/hooks";
+import { isOwnProfile } from "@/lib/profile-ownership";
 
 type ProfileTab = "assigned" | "comments" | "watched";
 type IssueSort = "id" | "issue_type" | "priority" | "severity" | "status" | "updated_at";
@@ -18,10 +19,11 @@ type IssueSortState = { sort: IssueSort; dir: IssueSortDirection };
 export function ProfilePage({ username }: { username?: string }) {
   const [tab, setTab] = useState<ProfileTab>("assigned");
   const [editing, setEditing] = useState(false);
-  const ownProfile = !username;
+  const activeUser = useStoredAuthUser();
+  const ownProfile = isOwnProfile(username, activeUser?.username);
   const activeTab = !ownProfile && tab === "watched" ? "assigned" : tab;
-  const loader = () => (username ? profileApi.get(username, { tab: activeTab }) : profileApi.me({ tab: activeTab }));
-  const { data, error, loading, unauthorized, reload } = useAsyncData(loader, [username, activeTab]);
+  const loader = () => (ownProfile ? profileApi.me({ tab: activeTab }) : profileApi.get(username!, { tab: activeTab }));
+  const { data, error, loading, unauthorized, reload } = useAsyncData(loader, [activeTab, ownProfile, username]);
   const tabs: ProfileTab[] = ownProfile ? ["assigned", "watched", "comments"] : ["assigned", "comments"];
 
   return (
