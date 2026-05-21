@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, UserRound, LoaderCircle } from "lucide-react";
+import { AlertCircle, LoaderCircle } from "lucide-react";
 import { profileApi } from "@/lib/api";
 import { useToast } from "@/components/feedback-provider";
 import { getStoredApiKey, storeAuthSession, clearAuthSession, API_KEY_STORAGE_KEY } from "@/lib/auth";
@@ -11,14 +11,9 @@ import { TEAM_MEMBERS } from "@/lib/users";
 export default function LoginPage() {
   const router = useRouter();
   const toast = useToast();
-  const [selectedKey, setSelectedKey] = useState<string>("");
+  const [selectedKey, setSelectedKey] = useState<string>(() => getStoredApiKey() || "");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    const key = getStoredApiKey() || "";
-    setSelectedKey(key);
-  }, []);
 
   const handleUserChange = async (apiKey: string) => {
     setSelectedKey(apiKey);
