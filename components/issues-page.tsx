@@ -248,15 +248,33 @@ export function IssuesPage() {
                     </td>
                     <td className="user-avatar-cell">
                       {assignee ? (
-                        <UserAvatar
-                          avatarUrl={assigneeProfile?.avatar_url}
-                          initials={assigneeProfile?.initials}
-                          size="table"
-                          user={{
-                            ...assignee,
-                            display_name: assigneeProfile?.display_name || assignee.display_name
-                          }}
-                        />
+                        assignee.username ? (
+                          <Link
+                            aria-label={`Open ${displayName(assigneeProfile?.display_name || assignee)} profile`}
+                            href={`/profile/${assignee.username}`}
+                            title={displayName(assigneeProfile?.display_name || assignee)}
+                          >
+                            <UserAvatar
+                              avatarUrl={assigneeProfile?.avatar_url}
+                              initials={assigneeProfile?.initials}
+                              size="table"
+                              user={{
+                                ...assignee,
+                                display_name: assigneeProfile?.display_name || assignee.display_name
+                              }}
+                            />
+                          </Link>
+                        ) : (
+                          <UserAvatar
+                            avatarUrl={assigneeProfile?.avatar_url}
+                            initials={assigneeProfile?.initials}
+                            size="table"
+                            user={{
+                              ...assignee,
+                              display_name: assigneeProfile?.display_name || assignee.display_name
+                            }}
+                          />
+                        )
                       ) : (
                         <span className="muted">Unassigned</span>
                       )}
