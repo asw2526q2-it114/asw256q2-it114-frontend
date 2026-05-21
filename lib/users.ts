@@ -4,10 +4,10 @@ export interface TeamMember {
 }
 
 export const TEAM_MEMBERS: TeamMember[] = [
-  { name: "Pol Giralt", apiKey: "bYsoVgQcRU3UZA9C2wXoz1hskWEfFuR99qYHdWAX" },
-  { name: "Pol Montanera", apiKey: "55uTqanHxtPDpI6OBwJlggziArcMvbpxce5X6VHt" },
-  { name: "Noel Freire", apiKey: "kmOASxuhCU5P7EBd8kptg8PnsAzotaVhyXcd8foI " },
-  { name: "Sergi Galán", apiKey: "8bW1GbULHgtlWONyoiZAGUFakkqbA95MWlABjQrv" },
-  { name: "Fernando Joel Alcívar", apiKey: "3IJRsnHXpOFLqOgiL6pouQQkiLyi9zD0YB4Vi1PU" },
+  { name: "Pol Giralt", apiKey: "OKHQ2hA6U54WVAumy3nwgQ08jAvAKkLTYeEiwY08" },
+  { name: "Pol Montanera", apiKey: "ugPOGkjUYCWqvg44IVctHD1IukghFOxTCqdssbrZ" },
+  { name: "Noel Freire", apiKey: "kmOASxuhCU5P7EBd8kptg8PnsAzotaVhyXcd8foI" },
+  { name: "Sergi Galán", apiKey: "c7vPxtIJ7bh3N4pAt9rMTRA20s5rH830unTNJItb" },
+  { name: "Fernando Joel Alcívar", apiKey: "Igydyc0Qize4YEcKb9hH1IlWaDtPNhBSxGyLMurB" },
   { name: "Unauthenticated User", apiKey: "" }
 ];
