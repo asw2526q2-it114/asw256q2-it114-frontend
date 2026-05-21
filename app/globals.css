@@ -440,6 +440,22 @@ h3 {
   outline: none;
 }
 
+.issue-catalog-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.table .dot-column {
+  text-align: center;
+}
+
+.table .dot-column .table-sort-button {
+  justify-content: center;
+}
+
 .table td {
   padding: 12px;
   border-bottom: 1px solid #edeeef;
