@@ -725,6 +725,7 @@ h3 {
   grid-template-columns: 1fr;
   max-width: 420px;
   margin: 0 auto;
+  overflow: visible;
 }
 
 .login-summary {
