@@ -1,8 +1,10 @@
 # IssueHub Frontend
 
-Next.js frontend for the IssueHub API.
+Client web responsive d'IssueHub desenvolupat amb **Next.js**, **React** i **TypeScript** per al **Tercer Lliurament** de l'assignatura.
 
-## Team
+Aquest repositori conté el frontend que consumeix l'API REST implementada al backend dels lliuraments 1 i 2. L'aplicació reprodueix les funcionalitats principals de la webapp inicial, adaptades a una arquitectura frontend + backend separada.
+
+## Equip
 
 - Pol Giralt
 - Pol Montanera
@@ -10,73 +12,122 @@ Next.js frontend for the IssueHub API.
 - Sergi Galán
 - Fernando Joel Alcívar
 
-## Taiga Board
+## Enllaços del projecte
 
-https://tree.taiga.io/project/polmontanera-asw/timeline
+- Frontend: https://asw256q2-it114-frontend.vercel.app/issues
+- Taiga: https://tree.taiga.io/project/polmontanera-asw/timeline
+- Backend https://asw256q2-it114-issues-tracker-68a6595cdaa6.herokuapp.com/api
 
-## Local Setup
 
-Install dependencies and start the development server:
+## Stack tecnològic
+
+- **Next.js 16**
+- **React 19**
+- **TypeScript**
+- **ESLint**
+- **pnpm**
+
+## Funcionalitats implementades
+
+### 1. Accés i selecció de perfil
+
+- Pantalla de `login` amb selector de perfil.
+- Validació del perfil contra el backend mitjançant `X-API-Key`.
+- Emmagatzematge de la sessió al navegador.
+
+Els perfils disponibles per a la demo estan definits a [lib/users.ts](/Users/polmontanera/Desktop/Q6%202526/ASW/Projecte/asw256q2-it114-frontend/lib/users.ts).
+
+### 2. Gestió d'issues
+
+- Llistat d'issues.
+- Cerca per text.
+- Filtres per estat, tipus, severitat, prioritat, etiqueta i assignació.
+- Ordenació de resultats.
+- Creació d'issues noves.
+- Edició i eliminació d'issues.
+- Inserció massiva d'issues.
+- Navegació cap al detall de cada issue.
+
+### 3. Detall d'una issue
+
+- Visualització de la descripció.
+- Gestió de l'assignat.
+- Gestió de watchers.
+- Gestió de deadline.
+- Gestió de comentaris.
+- Pujada i eliminació d'adjunts.
+- Visualització de l'activitat associada a la issue.
+
+### 4. Configuració de catàlegs
+
+Des del mòdul de `settings` es poden administrar els catàlegs que utilitza el sistema:
+
+- Statuses
+- Priorities
+- Types
+- Severities
+- Tags
+- Due dates
+
+Per a cada catàleg es poden fer operacions de creació, edició i eliminació a través de l'API.
+
+### 5. Perfil d'usuari
+
+- Consulta del perfil propi i del d'altres usuaris.
+- Edició del perfil propi.
+- Actualització de la bio.
+- Pujada o eliminació de l'avatar.
+- Consulta d'issues assignades, seguides i comentaris associats.
+- Visualització de l'API key del perfil autenticat.
+
+### 6. Disseny responsive
+
+La interfície està preparada per funcionar tant en escriptori com en dispositius mòbils:
+
+- Barra lateral en pantalles grans.
+- Navegació mòbil inferior.
+- Components i taules adaptats a diferents amplades.
+
+## Estructura principal del projecte
+
+```text
+app/           Rutes de l'aplicació Next.js
+components/    Components d'interfície
+lib/           API client, auth, hooks i utilitats
+```
+
+## Execució en local
+
+### Requisits previs
+
+- Node.js instal.lat
+- `pnpm` disponible al sistema
+- Backend d'IssueHub en funcionament
+
+### Instal·lació
 
 ```bash
 pnpm install
+```
+
+### Variables d'entorn
+
+Crea un fitxer `.env.local` si vols apuntar a un backend diferent del valor per defecte:
+
+```bash
+NEXT_PUBLIC_API_BASE_URL=https://asw256q2-it114-issues-tracker-68a6595cdaa6.herokuapp.com/api
+```
+
+Si `NEXT_PUBLIC_API_BASE_URL` no es defineix, el frontend utilitza `http://localhost:8000/api`.
+
+### Arrencada en desenvolupament
+
+```bash
 pnpm dev
 ```
 
-Create `.env.local` if the API is not running at the default URL:
+L'aplicació quedarà disponible habitualment a:
 
-```bash
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api
+```text
+http://localhost:3000
 ```
-
-Sign in by selecting a profile at `/login`. The frontend stores the API key
-in `localStorage` and sends it as `X-API-Key` on every protected API request.
-
-## Package Manager
-
-This project uses **pnpm 11** instead of npm.
-
-### Why pnpm?
-
-pnpm uses a strict dependency isolation model that prevents _phantom
-dependencies_ (accessing packages that are not declared in your own
-`package.json`). This reduces the risk of supply-chain attacks where a
-transitive dependency behaves differently than expected.
-
-### Installing pnpm
-
-Do **not** use `npm install -g pnpm`. Install pnpm directly from the
-official installer to avoid going through npm:
-
-**macOS**
-```bash
-brew install pnpm
-```
-
-**Windows**
-```powershell
-winget install pnpm
-```
-
-**Linux**
-```bash
-curl -fsSL https://get.pnpm.io/install.sh | sh -
-```
-
-For other platforms see [pnpm.io/installation](https://pnpm.io/installation).
-
-### Migrating from npm
-
-If you have a `package-lock.json` locally, remove it before installing:
-
-```bash
-rm package-lock.json
-rm -rf node_modules
-pnpm install
-```
-
-## Deployment
-
-Heroku deployment is planned for a later story and is not configured yet.
-See [`docs/deployment-heroku.md`](docs/deployment-heroku.md) for placeholder
-notes.
