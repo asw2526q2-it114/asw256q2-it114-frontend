@@ -5,6 +5,7 @@ import { Edit, FileUp, ImageIcon, Paperclip, Plus, Save, Trash2, X } from "lucid
 import { ErrorPanel } from "@/components/error-panel";
 import { useConfirm, useToast } from "@/components/feedback-provider";
 import { LoadingPanel } from "@/components/loading-panel";
+import { UserMultiSelect } from "@/components/user-multi-select";
 import { Attachment, Issue, IssueComment, UserSummary, displayName, isCurrentUser, issueApi } from "@/lib/api";
 import { useAsyncData } from "@/lib/hooks";
 
@@ -246,7 +247,8 @@ function Attachments({ issueId }: { issueId: string }) {
 function Watchers({ issueId }: { issueId: string }) {
   const confirm = useConfirm();
   const toast = useToast();
-  const [selected, setSelected] = useState("");
+  const [selected, setSelected] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
   const watchers = useAsyncData(() => issueApi.watchers(issueId), [issueId]);
   const members = useAsyncData(() => issueApi.assignableMembers(issueId), [issueId]);
   const watcherList = useMemo(() => normalizeWatchers(watchers.data), [watchers.data]);
@@ -255,14 +257,31 @@ function Watchers({ issueId }: { issueId: string }) {
 
   async function addWatcher(event: FormEvent) {
     event.preventDefault();
-    if (!selected) return;
+    if (selected.length === 0 || saving) return;
+    setSaving(true);
     try {
-      await issueApi.addWatcher(issueId, Number(selected));
-      setSelected("");
+      const results = await Promise.allSettled(selected.map((userId) => issueApi.addWatcher(issueId, Number(userId))));
+      const added = results.filter((result) => result.status === "fulfilled").length;
+      const failed = results.length - added;
+
+      setSelected([]);
       await watchers.reload();
-      toast.success("Watcher was added.", "Watcher added");
+      if (failed === 0) {
+        toast.success(`${added} watcher${added === 1 ? "" : "s"} added.`, "Watchers updated");
+      } else if (added > 0) {
+        toast.show({
+          message: `${added} watcher${added === 1 ? "" : "s"} added. ${failed} request${failed === 1 ? "" : "s"} failed.`,
+          title: "Partial watcher update",
+          tone: "info"
+        });
+      } else {
+        const firstError = results.find((result) => result.status === "rejected");
+        toast.error(firstError?.status === "rejected" ? firstError.reason : null, "Unable to add watchers.");
+      }
     } catch (error) {
-      toast.error(error, "Unable to add watcher.");
+      toast.error(error, "Unable to add watchers.");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -290,24 +309,21 @@ function Watchers({ issueId }: { issueId: string }) {
       <form className="panel grid" onSubmit={(event) => void addWatcher(event)}>
         <div>
           <p className="eyebrow">Watchers</p>
-          <h2>Add watcher</h2>
+          <h2>Add watchers</h2>
         </div>
         {members.loading ? <LoadingPanel label="Loading members" /> : null}
         {members.error ? <ErrorPanel error={members.error} onRetry={members.reload} /> : null}
-        <div className="field">
-          <label htmlFor="watcher">Member</label>
-          <select className="select" id="watcher" value={selected} onChange={(event) => setSelected(event.target.value)}>
-            <option value="">Select user</option>
-            {availableMembers.map((member) => (
-              <option key={member.id || member.username} value={member.id}>
-                {displayName(member)}
-              </option>
-            ))}
-          </select>
-        </div>
-        <button className="button primary" disabled={!selected} type="submit">
+        <UserMultiSelect
+          disabled={members.loading || saving}
+          id="watcher"
+          label="Members"
+          onChange={setSelected}
+          options={availableMembers}
+          value={selected}
+        />
+        <button className="button primary" disabled={selected.length === 0 || saving} type="submit">
           <Plus size={16} aria-hidden="true" />
-          Add watcher
+          {saving ? "Adding" : "Add watchers"}
         </button>
       </form>
       <div className="panel grid">
