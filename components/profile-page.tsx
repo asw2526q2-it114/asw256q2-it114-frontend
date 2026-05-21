@@ -12,6 +12,8 @@ import { useAsyncData } from "@/lib/hooks";
 
 type ProfileTab = "assigned" | "comments" | "watched";
 type IssueSort = "id" | "issue_type" | "priority" | "severity" | "status" | "updated_at";
+type IssueSortDirection = "asc" | "desc";
+type IssueSortState = { sort: IssueSort; dir: IssueSortDirection };
 
 export function ProfilePage({ username }: { username?: string }) {
   const [tab, setTab] = useState<ProfileTab>("assigned");
@@ -235,9 +237,16 @@ function ProfileActivity({
   tab: ProfileTab;
   tabs: ProfileTab[];
 }) {
-  const [sort, setSort] = useState<IssueSort>("updated_at");
-  const issueItems = useMemo(() => sortIssues(tab === "assigned" ? profile.assigned_issues : profile.watched_issues, sort), [profile.assigned_issues, profile.watched_issues, sort, tab]);
+  const [issueSort, setIssueSort] = useState<IssueSortState>({ sort: "updated_at", dir: "desc" });
+  const issueItems = useMemo(() => sortIssues(tab === "assigned" ? profile.assigned_issues : profile.watched_issues, issueSort), [profile.assigned_issues, profile.watched_issues, issueSort, tab]);
   const comments = useMemo(() => [...(profile.comments || [])].sort((left, right) => dateValue(right.created_at) - dateValue(left.created_at)), [profile.comments]);
+
+  function sortBy(column: IssueSort) {
+    setIssueSort((current) => ({
+      sort: column,
+      dir: current.sort === column && current.dir === "asc" ? "desc" : "asc"
+    }));
+  }
 
   return (
     <section className="profile-activity-card">
@@ -252,34 +261,34 @@ function ProfileActivity({
       {tab === "comments" ? (
         <ProfileComments comments={comments} onCommentChanged={onCommentChanged} ownProfile={ownProfile} />
       ) : (
-        <ProfileIssues issues={issueItems} sort={sort} tab={tab} onSortChange={setSort} />
+        <ProfileIssues issues={issueItems} sortState={issueSort} tab={tab} onSortChange={sortBy} />
       )}
     </section>
   );
 }
 
-function ProfileIssues({ issues, onSortChange, sort, tab }: { issues: UserMeIssueSummary[]; onSortChange: (sort: IssueSort) => void; sort: IssueSort; tab: ProfileTab }) {
+function ProfileIssues({
+  issues,
+  onSortChange,
+  sortState,
+  tab
+}: {
+  issues: UserMeIssueSummary[];
+  onSortChange: (sort: IssueSort) => void;
+  sortState: IssueSortState;
+  tab: ProfileTab;
+}) {
   return (
     <div className="profile-table-wrap">
-      <div className="profile-table-actions">
-        <select className="select compact" value={sort} onChange={(event) => onSortChange(event.target.value as IssueSort)}>
-          <option value="issue_type">Sort: type</option>
-          <option value="severity">Sort: severity</option>
-          <option value="priority">Sort: priority</option>
-          <option value="id">Sort: issue #</option>
-          <option value="status">Sort: status</option>
-          <option value="updated_at">Sort: modified</option>
-        </select>
-      </div>
       <table className="profile-table">
         <thead>
           <tr>
-            <th className="center">T</th>
-            <th className="center">S</th>
-            <th className="center">P</th>
-            <th>Issue</th>
-            <th>Status</th>
-            <th>Modified</th>
+            <ProfileSortableHeader className="center" column="issue_type" label="T" sortState={sortState} onSort={onSortChange} />
+            <ProfileSortableHeader className="center" column="severity" label="S" sortState={sortState} onSort={onSortChange} />
+            <ProfileSortableHeader className="center" column="priority" label="P" sortState={sortState} onSort={onSortChange} />
+            <ProfileSortableHeader column="id" label="Issue" sortState={sortState} onSort={onSortChange} />
+            <ProfileSortableHeader column="status" label="Status" sortState={sortState} onSort={onSortChange} />
+            <ProfileSortableHeader column="updated_at" label="Modified" sortState={sortState} onSort={onSortChange} />
           </tr>
         </thead>
         <tbody>
@@ -315,6 +324,30 @@ function ProfileIssues({ issues, onSortChange, sort, tab }: { issues: UserMeIssu
       </table>
       <span className="visually-hidden">{tabLabel(tab)}</span>
     </div>
+  );
+}
+
+function ProfileSortableHeader({
+  className,
+  column,
+  label,
+  onSort,
+  sortState
+}: {
+  className?: string;
+  column: IssueSort;
+  label: string;
+  onSort: (column: IssueSort) => void;
+  sortState: IssueSortState;
+}) {
+  const active = sortState.sort === column;
+  return (
+    <th className={className} aria-sort={active ? (sortState.dir === "asc" ? "ascending" : "descending") : "none"}>
+      <button className={`table-sort-button ${active ? "active" : ""}`} onClick={() => onSort(column)} type="button">
+        {label}
+        {active ? <span aria-hidden="true">{sortState.dir === "asc" ? "▲" : "▼"}</span> : null}
+      </button>
+    </th>
   );
 }
 
@@ -422,11 +455,20 @@ function Dot({ value }: { value: { color?: string; label: string } }) {
   return <span className="profile-dot" style={{ background: value.color || "#747792" }} title={value.label} />;
 }
 
-function sortIssues(items: UserMeIssueSummary[] | undefined, sort: IssueSort) {
+function sortIssues(items: UserMeIssueSummary[] | undefined, sortState: IssueSortState) {
   return [...(items || [])].sort((left, right) => {
-    if (sort === "id") return left.id - right.id;
-    if (sort === "updated_at") return dateValue(right.updated_at) - dateValue(left.updated_at);
-    return String(left[sort] || "").localeCompare(String(right[sort] || ""));
+    let result = 0;
+
+    if (sortState.sort === "id") {
+      result = left.id - right.id;
+    } else if (sortState.sort === "updated_at") {
+      result = dateValue(left.updated_at) - dateValue(right.updated_at);
+    } else {
+      result = String(left[sortState.sort] || "").localeCompare(String(right[sortState.sort] || ""));
+    }
+
+    if (result === 0) return left.id - right.id;
+    return sortState.dir === "asc" ? result : -result;
   });
 }
 
