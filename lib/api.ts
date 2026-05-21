@@ -90,7 +90,7 @@ export type IssueBulkCreateInput = {
   priority: string;
   status: string;
   assigned_to?: number | null;
-  tags?: string;
+  tags?: string | string[];
 };
 
 export type IssueComment = {
@@ -478,8 +478,13 @@ export function isCurrentUser(user?: UserSummary | null) {
 }
 
 export function issueTags(value?: string[] | string) {
-  if (!value) return "";
-  return Array.isArray(value) ? value.join(", ") : value;
+  return issueTagList(value).join(", ");
+}
+
+export function issueTagList(value?: string[] | string) {
+  if (!value) return [];
+  const items = Array.isArray(value) ? value : value.split(",");
+  return items.map((item) => String(item).trim()).filter(Boolean);
 }
 
 async function readResponse(response: Response) {
