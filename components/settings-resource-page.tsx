@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import { ArrowLeft, Edit, Plus, Trash2 } from "lucide-react";
 import { AuthPending } from "@/components/auth-pending";
+import { CustomSelect } from "@/components/custom-select";
 import { ErrorPanel } from "@/components/error-panel";
 import { LoadingPanel } from "@/components/loading-panel";
 import { PageTitle } from "@/components/page-title";
@@ -282,20 +283,14 @@ function CatalogField({
     return (
       <div className="field">
         <label htmlFor={id}>{field.label}</label>
-        <select
-          aria-describedby={error ? `${id}-error` : undefined}
-          aria-invalid={Boolean(error)}
-          className="select"
+        <CustomSelect
           id={id}
+          ariaDescribedBy={error ? `${id}-error` : undefined}
+          ariaInvalid={Boolean(error)}
           value={String(value)}
-          onChange={(event) => onChange(event.target.value)}
-        >
-          {field.options?.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+          onChange={onChange}
+          options={field.options || []}
+        />
         <FieldError id={`${id}-error`} message={error} />
       </div>
     );
@@ -370,24 +365,24 @@ function ReplacementDeleteDialog({
         </div>
         <div className="field">
           <label htmlFor="replacement">Replacement</label>
-          <select
-            aria-describedby={error ? "replacement-error" : undefined}
-            aria-invalid={Boolean(error)}
-            className="select"
+          <CustomSelect
             id="replacement"
+            ariaDescribedBy={error ? "replacement-error" : undefined}
+            ariaInvalid={Boolean(error)}
             value={replacement}
-            onChange={(event) => {
-              setReplacement(event.target.value);
+            onChange={(value) => {
+              setReplacement(value);
               setError("");
             }}
-          >
-            <option value="">Choose replacement</option>
-            {replacements.map((candidate) => (
-              <option key={candidate.id} value={candidate.id}>
-                {displayName(candidate)}
-              </option>
-            ))}
-          </select>
+            options={[
+              { value: "", label: "Choose replacement" },
+              ...replacements.map((candidate) => ({
+                value: String(candidate.id || ""),
+                label: displayName(candidate),
+                color: candidate.color
+              }))
+            ]}
+          />
           <FieldError id="replacement-error" message={error} />
         </div>
         <div className="toolbar">

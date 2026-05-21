@@ -17,6 +17,7 @@ import { AuthPending } from "@/components/auth-pending";
 import { ErrorPanel } from "@/components/error-panel";
 import { useConfirm, useToast } from "@/components/feedback-provider";
 import { IssueEditor } from "@/components/issue-editor";
+import { CustomSelect } from "@/components/custom-select";
 import { LoadingPanel } from "@/components/loading-panel";
 import { PageTitle } from "@/components/page-title";
 import { UserMultiSelect } from "@/components/user-multi-select";
@@ -298,19 +299,18 @@ function IssueSidebar({
         {members.loading ? <LoadingPanel label="Loading members" /> : null}
         {members.error && !members.unauthorized ? <ErrorPanel error={members.error} onRetry={members.reload} /> : null}
         <div className="issue-inline-form">
-          <select
-            className="select"
+          <CustomSelect
             disabled={members.loading || assigneeSaving}
             value={assigneeValue}
-            onChange={(event) => void updateAssignee(event.target.value)}
-          >
-            <option value="">Unassigned</option>
-            {members.data?.map((member) => (
-              <option key={member.id || member.username} value={member.id}>
-                {displayName(member)}
-              </option>
-            ))}
-          </select>
+            onChange={(value) => void updateAssignee(value)}
+            options={[
+              { value: "", label: "Unassigned" },
+              ...(members.data || []).map((member) => ({
+                value: String(member.id || ""),
+                label: displayName(member),
+              })),
+            ]}
+          />
         </div>
       </SidebarGroup>
 
