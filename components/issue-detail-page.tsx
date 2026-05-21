@@ -338,15 +338,17 @@ function AttachmentsBlock({ issueId, onAttachmentsChanged }: { issueId: string; 
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const { data, error, loading, reload } = useAsyncData(() => issueApi.attachments(issueId), [issueId]);
   const attachments = useMemo(() => normalizeAttachments(data), [data]);
 
-  async function upload(files: FileList | null) {
-    if (!files || files.length === 0) return;
+  async function upload(files: File[]) {
+    if (files.length === 0) return;
     setUploading(true);
     try {
       await issueApi.uploadAttachments(issueId, files);
       if (inputRef.current) inputRef.current.value = "";
+      setSelectedFiles([]);
       await reload();
       onAttachmentsChanged();
       toast.success(`${files.length} attachment${files.length === 1 ? "" : "s"} uploaded.`, "Upload complete");
@@ -389,10 +391,10 @@ function AttachmentsBlock({ issueId, onAttachmentsChanged }: { issueId: string; 
           multiple
           ref={inputRef}
           type="file"
-          onChange={(event) => void upload(event.target.files)}
+          onChange={(event) => setSelectedFiles(Array.from(event.target.files || []))}
         />
         <p className="muted">Allowed: PDF, DOC, DOCX, TXT, PNG, JPG, JPEG, CSV, XLSX. Max 5 MB per file.</p>
-        <button className="button secondary" disabled={uploading} onClick={() => inputRef.current?.click()} type="button">
+        <button className="button secondary" disabled={uploading || selectedFiles.length === 0} onClick={() => void upload(selectedFiles)} type="button">
           <Upload size={16} aria-hidden="true" />
           {uploading ? "Uploading" : "Upload attachments"}
         </button>

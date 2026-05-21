@@ -197,11 +197,11 @@ export function IssuesPage() {
           <table className="table">
             <thead>
               <tr>
+                <SortableHeader activeSort={filters.sort} className="dot-column" column="issue_type" dir={filters.dir} label="Type" onSort={sortBy} />
+                <SortableHeader activeSort={filters.sort} className="dot-column" column="severity" dir={filters.dir} label="Severity" onSort={sortBy} />
+                <SortableHeader activeSort={filters.sort} className="dot-column" column="priority" dir={filters.dir} label="Priority" onSort={sortBy} />
                 <SortableHeader activeSort={filters.sort} column="pk" dir={filters.dir} label="Issue" onSort={sortBy} />
                 <SortableHeader activeSort={filters.sort} column="status" dir={filters.dir} label="Status" onSort={sortBy} />
-                <SortableHeader activeSort={filters.sort} column="issue_type" dir={filters.dir} label="Type" onSort={sortBy} />
-                <SortableHeader activeSort={filters.sort} column="severity" dir={filters.dir} label="Severity" onSort={sortBy} />
-                <SortableHeader activeSort={filters.sort} column="priority" dir={filters.dir} label="Priority" onSort={sortBy} />
                 <SortableHeader activeSort={filters.sort} column="assigned_to" dir={filters.dir} label="Assignee" onSort={sortBy} />
                 <th>Tags</th>
                 <SortableHeader activeSort={filters.sort} column="created_at" dir={filters.dir} label="Created" onSort={sortBy} />
@@ -221,6 +221,15 @@ export function IssuesPage() {
                     }}
                     tabIndex={0}
                   >
+                    <td className="dot-column">
+                      <CatalogDot value={catalogBadge(issue.issue_type_label, issue.issue_type_color, issue.issue_type)} />
+                    </td>
+                    <td className="dot-column">
+                      <CatalogDot value={catalogBadge(issue.severity_label, issue.severity_color, issue.severity)} />
+                    </td>
+                    <td className="dot-column">
+                      <CatalogDot value={catalogBadge(issue.priority_label, issue.priority_color, issue.priority)} />
+                    </td>
                     <td>
                       <Link href={`/issues/${issue.id}`}>
                         <strong>#{issueNumber(issue)}</strong> {issue.subject}
@@ -229,15 +238,6 @@ export function IssuesPage() {
                     </td>
                     <td>
                       <StatusBadge value={catalogBadge(issue.status_label, issue.status_color, issue.status)} />
-                    </td>
-                    <td>
-                      <StatusBadge value={catalogBadge(issue.issue_type_label, issue.issue_type_color, issue.issue_type)} />
-                    </td>
-                    <td>
-                      <StatusBadge value={catalogBadge(issue.severity_label, issue.severity_color, issue.severity)} />
-                    </td>
-                    <td>
-                      <StatusBadge value={catalogBadge(issue.priority_label, issue.priority_color, issue.priority)} />
                     </td>
                     <td>{displayName(issue.assigned_to)}</td>
                     <td>{issueTags(issue.tags) || "No tags"}</td>
@@ -294,14 +294,28 @@ export function IssuesPage() {
   );
 }
 
+function CatalogDot({ value }: { value: { color?: string; label: string } }) {
+  return (
+    <span
+      aria-label={value.label}
+      className="issue-catalog-dot"
+      role="img"
+      style={{ background: value.color || "#747792" }}
+      title={value.label}
+    />
+  );
+}
+
 function SortableHeader({
   activeSort,
+  className,
   column,
   dir,
   label,
   onSort
 }: {
   activeSort: string;
+  className?: string;
   column: string;
   dir: string;
   label: string;
@@ -309,7 +323,7 @@ function SortableHeader({
 }) {
   const active = activeSort === column;
   return (
-    <th aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}>
+    <th className={className} aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}>
       <button className={`table-sort-button ${active ? "active" : ""}`} onClick={() => onSort(column)} type="button">
         {label}
         {active ? <span aria-hidden="true">{dir === "asc" ? "▲" : "▼"}</span> : null}
