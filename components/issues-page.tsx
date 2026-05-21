@@ -11,6 +11,7 @@ import { IssueEditor } from "@/components/issue-editor";
 import { LoadingPanel } from "@/components/loading-panel";
 import { PageTitle } from "@/components/page-title";
 import { TagMultiSelect } from "@/components/tag-multi-select";
+import { UserAvatar } from "@/components/user-avatar";
 import { useConfirm, useToast } from "@/components/feedback-provider";
 import {
   CatalogItem,
@@ -24,7 +25,7 @@ import {
   issueNumber,
   issueTags
 } from "@/lib/api";
-import { useAsyncData } from "@/lib/hooks";
+import { useAssigneeAvatarMap, useAsyncData } from "@/lib/hooks";
 
 const emptyFilters = {
   assigned_to: "",
@@ -56,6 +57,7 @@ export function IssuesPage() {
   const tags = useAsyncData(() => catalogApi.list("/tags/"), []);
   const dueDates = useAsyncData(() => catalogApi.list("/due-dates/"), []);
   const memberOptions = useMemo(() => uniqueMembers(data || []), [data]);
+  const assigneeAvatarMap = useAssigneeAvatarMap(data);
   const activeFilterCount = useMemo(() => countActiveFilters(filters), [filters]);
 
   async function removeIssue(issue: Issue) {
@@ -214,6 +216,8 @@ export function IssuesPage() {
             <tbody>
               {data.map((issue) => {
                 const ownIssue = isCurrentUser(issue.creator);
+                const assignee = issue.assigned_to;
+                const assigneeProfile = assignee?.username ? assigneeAvatarMap[assignee.username] : undefined;
                 return (
                   <tr
                     className="clickable-row"
@@ -242,7 +246,39 @@ export function IssuesPage() {
                     <td>
                       <StatusBadge value={catalogBadge(issue.status_label, issue.status_color, issue.status)} />
                     </td>
-                    <td>{displayName(issue.assigned_to)}</td>
+                    <td className="user-avatar-cell">
+                      {assignee ? (
+                        assignee.username ? (
+                          <Link
+                            aria-label={`Open ${displayName(assigneeProfile?.display_name || assignee)} profile`}
+                            href={`/profile/${assignee.username}`}
+                            title={displayName(assigneeProfile?.display_name || assignee)}
+                          >
+                            <UserAvatar
+                              avatarUrl={assigneeProfile?.avatar_url}
+                              initials={assigneeProfile?.initials}
+                              size="table"
+                              user={{
+                                ...assignee,
+                                display_name: assigneeProfile?.display_name || assignee.display_name
+                              }}
+                            />
+                          </Link>
+                        ) : (
+                          <UserAvatar
+                            avatarUrl={assigneeProfile?.avatar_url}
+                            initials={assigneeProfile?.initials}
+                            size="table"
+                            user={{
+                              ...assignee,
+                              display_name: assigneeProfile?.display_name || assignee.display_name
+                            }}
+                          />
+                        )
+                      ) : (
+                        <span className="muted">Unassigned</span>
+                      )}
+                    </td>
                     <td>
                       <DeadlineBadge deadline={issue.deadline} dueDates={dueDates.data} />
                     </td>
