@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { CustomSelect } from "@/components/custom-select";
 import { Save, Trash2, UserMinus } from "lucide-react";
 import { ErrorPanel } from "@/components/error-panel";
 import { useConfirm, useToast } from "@/components/feedback-provider";
@@ -124,14 +125,18 @@ export function IssuePlanningPanel({ issueId }: { issueId: string }) {
         {members.error && !members.unauthorized ? <ErrorPanel error={members.error} onRetry={members.reload} /> : null}
         <div className="field">
           <label htmlFor="assignee">Assignable member</label>
-          <select className="select" id="assignee" value={assignee} onChange={(event) => setAssignee(event.target.value)}>
-            <option value="">Select user</option>
-            {members.data?.map((member) => (
-              <option key={member.id || member.username} value={member.id}>
-                {displayName(member)}
-              </option>
-            ))}
-          </select>
+          <CustomSelect
+            id="assignee"
+            value={assignee}
+            onChange={(val) => setAssignee(val)}
+            options={[
+              { value: "", label: "Select user" },
+              ...(members.data || []).map((member) => ({
+                value: String(member.id || ""),
+                label: displayName(member)
+              }))
+            ]}
+          />
         </div>
         <div className="toolbar">
           <button className="button primary" onClick={() => void saveAssignee()} type="button">

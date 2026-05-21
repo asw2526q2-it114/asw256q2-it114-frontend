@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useMemo, useRef, useState } from "react";
+import { CustomSelect } from "@/components/custom-select";
 import {
   AlertTriangle,
   Edit,
@@ -256,14 +257,17 @@ function IssueSidebar({
         {members.loading ? <LoadingPanel label="Loading members" /> : null}
         {members.error && !members.unauthorized ? <ErrorPanel error={members.error} onRetry={members.reload} /> : null}
         <div className="issue-inline-form">
-          <select className="select" value={assigneeValue} onChange={(event) => setAssignee(event.target.value)}>
-            <option value="">Unassigned</option>
-            {members.data?.map((member) => (
-              <option key={member.id || member.username} value={member.id}>
-                {displayName(member)}
-              </option>
-            ))}
-          </select>
+          <CustomSelect
+            value={assigneeValue}
+            onChange={(val) => setAssignee(val)}
+            options={[
+              { value: "", label: "Unassigned" },
+              ...(members.data || []).map((member) => ({
+                value: String(member.id || ""),
+                label: displayName(member)
+              }))
+            ]}
+          />
           <button className="button secondary" onClick={() => void saveAssignee()} type="button">
             <Save size={15} aria-hidden="true" />
             Update
