@@ -509,6 +509,7 @@ h3 {
 
 .user-avatar-cell {
   width: 1%;
+  text-align: center;
   white-space: nowrap;
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Issue, UserProfile, isUnauthorized, profileApi } from "@/lib/api";
 import { getStoredApiKey, subscribeToAuthChanges } from "@/lib/auth";
@@ -57,7 +57,6 @@ export type UserAvatarMap = Record<
 
 export function useAssigneeAvatarMap(issues: Issue[] | null) {
   const [avatars, setAvatars] = useState<UserAvatarMap>({});
-  const requestedUsernames = useRef(new Set<string>());
   const usernames = useMemo(() => {
     const values = new Set<string>();
     issues?.forEach((issue) => {
@@ -68,15 +67,12 @@ export function useAssigneeAvatarMap(issues: Issue[] | null) {
   }, [issues]);
 
   useEffect(() => {
-    const missing = usernames.filter((username) => !requestedUsernames.current.has(username) && !avatars[username]);
-    if (missing.length === 0) return;
-
     let cancelled = false;
-    missing.forEach((username) => requestedUsernames.current.add(username));
+    if (usernames.length === 0) return;
 
     void Promise.allSettled(
-      missing.map(async (username) => {
-        const response = await profileApi.get(username, {});
+      usernames.map(async (username) => {
+        const response = await fetchProfileWithTimeout(username, 2000);
         return [username, toAvatarSummary(response)] as const;
       })
     ).then((results) => {
@@ -96,7 +92,7 @@ export function useAssigneeAvatarMap(issues: Issue[] | null) {
     return () => {
       cancelled = true;
     };
-  }, [avatars, usernames]);
+  }, [usernames]);
 
   return avatars;
 }
@@ -134,4 +130,23 @@ function toAvatarSummary(profile: UserProfile) {
     display_name: profile.profile?.display_name,
     initials: profile.profile?.initials
   };
+}
+
+function fetchProfileWithTimeout(username: string, timeoutMs: number) {
+  return new Promise<UserProfile>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Timed out loading profile for ${username}`));
+    }, timeoutMs);
+
+    void profileApi
+      .get(username, {})
+      .then((profile) => {
+        clearTimeout(timer);
+        resolve(profile);
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
 }
