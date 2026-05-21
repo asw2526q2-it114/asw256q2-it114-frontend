@@ -979,6 +979,10 @@ h3 {
   margin-top: 14px;
 }
 
+.issue-section-more {
+  margin-top: 4px;
+}
+
 .issue-attachment-row,
 .issue-comment {
   display: grid;
