@@ -11,6 +11,7 @@ import { IssueEditor } from "@/components/issue-editor";
 import { LoadingPanel } from "@/components/loading-panel";
 import { PageTitle } from "@/components/page-title";
 import { TagMultiSelect } from "@/components/tag-multi-select";
+import { CustomSelect } from "@/components/custom-select";
 import { UserAvatar } from "@/components/user-avatar";
 import { useConfirm, useToast } from "@/components/feedback-provider";
 import {
@@ -171,18 +172,18 @@ export function IssuesPage() {
               <CatalogFilter label="Severity" options={severities.data} value={filters.severity} onChange={(value) => setFilters((current) => ({ ...current, severity: value }))} />
               <CatalogFilter label="Priority" options={priorities.data} value={filters.priority} onChange={(value) => setFilters((current) => ({ ...current, priority: value }))} />
               <CatalogFilter label="Tag" options={tags.data} value={filters.tag} onChange={(value) => setFilters((current) => ({ ...current, tag: value }))} />
-              <select
-                className="select compact"
+              <CustomSelect
                 value={filters.assigned_to}
-                onChange={(event) => setFilters((current) => ({ ...current, assigned_to: event.target.value }))}
-              >
-                <option value="">Any assignee</option>
-                {memberOptions.map((member) => (
-                  <option key={member.id || member.username} value={member.id}>
-                    {displayName(member)}
-                  </option>
-                ))}
-              </select>
+                onChange={(value) => setFilters((current) => ({ ...current, assigned_to: value }))}
+                options={[
+                  { value: "", label: "Any assignee" },
+                  ...memberOptions.map((member) => ({
+                    value: String(member.id || ""),
+                    label: displayName(member)
+                  }))
+                ]}
+                compact
+              />
               <button className="button secondary" onClick={() => setFilters(emptyFilters)} type="button">
                 Clear filters
               </button>
@@ -486,14 +487,18 @@ function BulkInsertDialog({ fallbackMembers, onClose, onSaved }: { fallbackMembe
         <div className="grid two">
           <div className="field">
             <label htmlFor="bulk-assignee">Assignee</label>
-            <select className="select" id="bulk-assignee" value={input.assigned_to} onChange={(event) => updateField("assigned_to", event.target.value)}>
-              <option value="">Unassigned</option>
-              {fallbackMembers.map((member) => (
-                <option key={member.id || member.username} value={member.id}>
-                  {displayName(member)}
-                </option>
-              ))}
-            </select>
+            <CustomSelect
+              id="bulk-assignee"
+              value={input.assigned_to}
+              onChange={(value) => updateField("assigned_to", value)}
+              options={[
+                { value: "", label: "Unassigned" },
+                ...fallbackMembers.map((member) => ({
+                  value: String(member.id || ""),
+                  label: displayName(member)
+                }))
+              ]}
+            />
             <FieldError id="bulk-assignee-error" />
           </div>
           <TagMultiSelect disabled={catalogsLoading || Boolean(catalogError)} id="bulk-tags" label="Tags" options={tags.data} value={input.tags} onChange={updateTags} />
@@ -513,15 +518,25 @@ function BulkInsertDialog({ fallbackMembers, onClose, onSaved }: { fallbackMembe
 }
 
 function CatalogFilter({ label, onChange, options, value }: { label: string; onChange: (value: string) => void; options: CatalogItem[] | null; value: string }) {
+  const customOptions = useMemo(() => {
+    const mapped = (options || []).map((option) => ({
+      value: option.key || displayName(option),
+      label: displayName(option),
+      color: option.color
+    }));
+    return [
+      { value: "", label: `Any ${label.toLowerCase()}` },
+      ...mapped
+    ];
+  }, [options, label]);
+
   return (
-    <select className="select compact" value={value} onChange={(event) => onChange(event.target.value)}>
-      <option value="">Any {label.toLowerCase()}</option>
-      {options?.map((option) => (
-        <option key={option.id} value={option.key || displayName(option)}>
-          {displayName(option)}
-        </option>
-      ))}
-    </select>
+    <CustomSelect
+      value={value}
+      onChange={onChange}
+      options={customOptions}
+      compact
+    />
   );
 }
 
@@ -541,24 +556,29 @@ function SelectField({
   value: string;
 }) {
   const id = `bulk-${field}`;
+  const customOptions = useMemo(() => {
+    const mapped = (options || []).map((option) => ({
+      value: option.key || "",
+      label: displayName(option),
+      color: option.color
+    }));
+    return [
+      { value: "", label: `Select ${label.toLowerCase()}` },
+      ...mapped
+    ];
+  }, [options, label]);
+
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <select
-        aria-describedby={error ? `${id}-error` : undefined}
-        aria-invalid={Boolean(error)}
-        className="select"
+      <CustomSelect
         id={id}
         value={value}
-        onChange={(event) => onChange(field, event.target.value)}
-      >
-        <option value="">Select {label.toLowerCase()}</option>
-        {options?.map((option) => (
-          <option key={option.id} value={option.key || ""}>
-            {displayName(option)}
-          </option>
-        ))}
-      </select>
+        onChange={(val) => onChange(field, val)}
+        options={customOptions}
+        ariaDescribedBy={error ? `${id}-error` : undefined}
+        ariaInvalid={Boolean(error)}
+      />
       <FieldError id={`${id}-error`} message={error} />
     </div>
   );

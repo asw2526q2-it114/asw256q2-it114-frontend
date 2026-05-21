@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useRef, useState } from "react";
+import { CustomSelect } from "@/components/custom-select";
 import { Edit, FileUp, ImageIcon, Paperclip, Plus, Save, Trash2, X } from "lucide-react";
 import { ErrorPanel } from "@/components/error-panel";
 import { useConfirm, useToast } from "@/components/feedback-provider";
@@ -296,14 +297,18 @@ function Watchers({ issueId }: { issueId: string }) {
         {members.error ? <ErrorPanel error={members.error} onRetry={members.reload} /> : null}
         <div className="field">
           <label htmlFor="watcher">Member</label>
-          <select className="select" id="watcher" value={selected} onChange={(event) => setSelected(event.target.value)}>
-            <option value="">Select user</option>
-            {availableMembers.map((member) => (
-              <option key={member.id || member.username} value={member.id}>
-                {displayName(member)}
-              </option>
-            ))}
-          </select>
+          <CustomSelect
+            id="watcher"
+            value={selected}
+            onChange={(val) => setSelected(val)}
+            options={[
+              { value: "", label: "Select user" },
+              ...availableMembers.map((member) => ({
+                value: String(member.id || ""),
+                label: displayName(member)
+              }))
+            ]}
+          />
         </div>
         <button className="button primary" disabled={!selected} type="submit">
           <Plus size={16} aria-hidden="true" />

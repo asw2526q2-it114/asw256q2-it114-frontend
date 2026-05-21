@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
+import { CustomSelect } from "@/components/custom-select";
 import { ArrowLeft, Edit, Plus, Trash2 } from "lucide-react";
 import { AuthPending } from "@/components/auth-pending";
 import { ErrorPanel } from "@/components/error-panel";
@@ -282,20 +283,12 @@ function CatalogField({
     return (
       <div className="field">
         <label htmlFor={id}>{field.label}</label>
-        <select
-          aria-describedby={error ? `${id}-error` : undefined}
-          aria-invalid={Boolean(error)}
-          className="select"
+        <CustomSelect
           id={id}
           value={String(value)}
-          onChange={(event) => onChange(event.target.value)}
-        >
-          {field.options?.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+          onChange={(val) => onChange(val)}
+          options={field.options || []}
+        />
         <FieldError id={`${id}-error`} message={error} />
       </div>
     );
@@ -347,6 +340,18 @@ function ReplacementDeleteDialog({
   const [error, setError] = useState("");
   const [deleting, setDeleting] = useState(false);
 
+  const replacementOptions = useMemo(() => {
+    const mapped = replacements.map((candidate) => ({
+      value: String(candidate.id),
+      label: displayName(candidate),
+      color: candidate.color
+    }));
+    return [
+      { value: "", label: "Choose replacement" },
+      ...mapped
+    ];
+  }, [replacements]);
+
   return (
     <div className="modal-backdrop" role="presentation">
       <form
@@ -370,24 +375,17 @@ function ReplacementDeleteDialog({
         </div>
         <div className="field">
           <label htmlFor="replacement">Replacement</label>
-          <select
-            aria-describedby={error ? "replacement-error" : undefined}
-            aria-invalid={Boolean(error)}
-            className="select"
+          <CustomSelect
             id="replacement"
             value={replacement}
-            onChange={(event) => {
-              setReplacement(event.target.value);
+            onChange={(val) => {
+              setReplacement(val);
               setError("");
             }}
-          >
-            <option value="">Choose replacement</option>
-            {replacements.map((candidate) => (
-              <option key={candidate.id} value={candidate.id}>
-                {displayName(candidate)}
-              </option>
-            ))}
-          </select>
+            options={replacementOptions}
+            ariaDescribedBy={error ? "replacement-error" : undefined}
+            ariaInvalid={Boolean(error)}
+          />
           <FieldError id="replacement-error" message={error} />
         </div>
         <div className="toolbar">

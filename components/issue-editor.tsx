@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, useMemo } from "react";
+import { CustomSelect } from "@/components/custom-select";
 import { CatalogItem, Issue, IssueInput, UserSummary, catalogApi, displayName, issueApi, issueNumber, issueTagList, issueTags } from "@/lib/api";
 import { useAsyncData } from "@/lib/hooks";
 import { ErrorPanel } from "@/components/error-panel";
@@ -134,14 +135,18 @@ export function IssueEditor({
           <SelectField error={errors.severity} field="severity" label="Severity" options={severities.data} value={input.severity} onChange={updateField} />
           <div className="field">
             <label htmlFor="issue-editor-assignee">Assignee</label>
-            <select className="select" id="issue-editor-assignee" value={input.assigned_to} onChange={(event) => updateField("assigned_to", event.target.value)}>
-              <option value="">Unassigned</option>
-              {members.data?.map((member) => (
-                <option key={member.id || member.username} value={member.id}>
-                  {displayName(member)}
-                </option>
-              ))}
-            </select>
+            <CustomSelect
+              id="issue-editor-assignee"
+              value={input.assigned_to}
+              onChange={(val) => updateField("assigned_to", val)}
+              options={[
+                { value: "", label: "Unassigned" },
+                ...(members.data || []).map((member) => ({
+                  value: String(member.id || ""),
+                  label: displayName(member)
+                }))
+              ]}
+            />
             <FieldError id="issue-editor-assignee-error" />
           </div>
           <div className="field">
@@ -180,24 +185,29 @@ function SelectField({
   value: string;
 }) {
   const id = `issue-editor-${field}`;
+  const customOptions = useMemo(() => {
+    const mapped = (options || []).map((option) => ({
+      value: option.key || "",
+      label: displayName(option),
+      color: option.color
+    }));
+    return [
+      { value: "", label: `Select ${label.toLowerCase()}` },
+      ...mapped
+    ];
+  }, [options, label]);
+
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <select
-        aria-describedby={error ? `${id}-error` : undefined}
-        aria-invalid={Boolean(error)}
-        className="select"
+      <CustomSelect
         id={id}
         value={value}
-        onChange={(event) => onChange(field, event.target.value)}
-      >
-        <option value="">Select {label.toLowerCase()}</option>
-        {options?.map((option) => (
-          <option key={option.id} value={option.key || ""}>
-            {displayName(option)}
-          </option>
-        ))}
-      </select>
+        onChange={(val) => onChange(field, val)}
+        options={customOptions}
+        ariaDescribedBy={error ? `${id}-error` : undefined}
+        ariaInvalid={Boolean(error)}
+      />
       <FieldError id={`${id}-error`} message={error} />
     </div>
   );
